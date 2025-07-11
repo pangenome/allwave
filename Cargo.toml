@@ -1,0 +1,18 @@
+[package]
+name = "allwave"
+version = "0.1.0"
+edition = "2021"
+authors = ["AllWave Contributors"]
+description = "High-performance pairwise sequence aligner using bidirectional wavefront alignment"
+license = "MIT"
+repository = "https://github.com/yourusername/allwave"
+readme = "README.md"
+keywords = ["bioinformatics", "alignment", "wavefront", "genomics"]
+categories = ["science", "command-line-utilities"]
+
+[dependencies]
+bio = "1.4"
+clap = { version = "4.4", features = ["derive"] }
+flate2 = "1.0"
+lib_wfa2 = { git = "https://github.com/AndreaGuarracino/lib_wfa2", rev = "879c59adc1ffe67056ba38b7a27adf33d3595348" }
+rand = "0.8"
