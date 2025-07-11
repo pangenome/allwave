@@ -1,9 +1,11 @@
 use bio::io::fasta;
 use clap::Parser;
 use flate2::read::GzDecoder;
+use rayon::prelude::*;
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 mod wfa;
 use wfa::{align_sequences, AlignmentMode, AlignmentResult, Penalties};
@@ -22,6 +24,10 @@ struct Args {
     /// Alignment scores: match,mismatch,gap_open,gap_ext[,gap_open2,gap_ext2]
     #[arg(short, long, default_value = "0,5,8,2,24,1")]
     scores: String,
+    
+    /// Number of threads to use for parallel processing
+    #[arg(short, long, default_value = "1")]
+    threads: usize,
 }
 
 fn parse_scores(
@@ -132,6 +138,37 @@ struct PafRecord<'a> {
     alignment: &'a AlignmentResult,
 }
 
+fn parse_cigar_lengths(cigar: &str) -> (usize, usize) {
+    let mut query_len = 0;
+    let mut target_len = 0;
+    let mut num_str = String::new();
+    
+    for ch in cigar.chars() {
+        if ch.is_ascii_digit() {
+            num_str.push(ch);
+        } else {
+            if let Ok(count) = num_str.parse::<usize>() {
+                match ch {
+                    '=' | 'X' => {
+                        query_len += count;
+                        target_len += count;
+                    }
+                    'I' => {
+                        query_len += count;
+                    }
+                    'D' => {
+                        target_len += count;
+                    }
+                    _ => {}
+                }
+            }
+            num_str.clear();
+        }
+    }
+    
+    (query_len, target_len)
+}
+
 fn write_paf_record(out: &mut dyn Write, record: &PafRecord) -> io::Result<()> {
     let query_aligned_len = record.query_end - record.query_start;
     let target_aligned_len = record.target_end - record.target_start;
@@ -165,13 +202,12 @@ fn write_paf_record(out: &mut dyn Write, record: &PafRecord) -> io::Result<()> {
 
 fn main() -> io::Result<()> {
     let args = Args::parse();
-
-    // Open output file or use stdout
-    let mut output: Box<dyn Write> = if let Some(output_path) = args.output {
-        Box::new(File::create(output_path)?)
-    } else {
-        Box::new(io::stdout())
-    };
+    
+    // Set the number of threads for rayon
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(args.threads)
+        .build_global()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
     // Read FASTA file (handle both plain and gzipped)
     let mut sequences = Vec::new();
@@ -202,13 +238,20 @@ fn main() -> io::Result<()> {
     let (alignment_mode, penalties) = parse_scores(&args.scores)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?;
 
-    // Align all pairs
+    // Create all alignment pairs
+    let mut pairs = Vec::new();
     for i in 0..sequences.len() {
         for j in 0..sequences.len() {
-            if i == j {
-                continue;
+            if i != j {
+                pairs.push((i, j));
             }
+        }
+    }
 
+    // Process alignments in parallel
+    let results: Vec<_> = pairs
+        .par_iter()
+        .map(|&(i, j)| {
             let (query_name, query_seq) = &sequences[i];
             let (target_name, target_seq) = &sequences[j];
 
@@ -227,24 +270,52 @@ fn main() -> io::Result<()> {
             // Perform alignment
             match align_sequences(&seq_to_align, target_seq, &penalties, alignment_mode) {
                 Ok(alignment) => {
-                    let record = PafRecord {
-                        query_name,
-                        query_len: query_seq.len(),
-                        query_start: 0,
-                        query_end: query_seq.len(),
-                        query_strand: strand,
-                        target_name,
-                        target_len: target_seq.len(),
-                        target_start: 0,
-                        target_end: target_seq.len(),
-                        alignment: &alignment,
-                    };
-                    write_paf_record(&mut output, &record)?;
+                    Some((i, j, strand, alignment))
                 }
                 Err(e) => {
-                    eprintln!("Warning: Failed to align {query_name} vs {target_name}: {e}");
+                    eprintln!("Warning: Failed to align {} vs {}: {}", query_name, target_name, e);
+                    None
                 }
             }
+        })
+        .collect();
+
+    // Write results to output
+    let output = Arc::new(Mutex::new(if let Some(output_path) = args.output {
+        Box::new(File::create(output_path)?) as Box<dyn Write + Send>
+    } else {
+        Box::new(io::stdout()) as Box<dyn Write + Send>
+    }));
+
+    for result in results {
+        if let Some((i, j, strand, alignment)) = result {
+            let (query_name, query_seq) = &sequences[i];
+            let (target_name, target_seq) = &sequences[j];
+            
+            let (cigar_query_len, cigar_target_len) = parse_cigar_lengths(&alignment.cigar);
+            
+            // For reverse strand alignments, we need to adjust the query coordinates
+            let (query_start, query_end) = if strand == '-' {
+                (query_seq.len().saturating_sub(cigar_query_len), query_seq.len())
+            } else {
+                (0, cigar_query_len.min(query_seq.len()))
+            };
+            
+            let record = PafRecord {
+                query_name,
+                query_len: query_seq.len(),
+                query_start,
+                query_end,
+                query_strand: strand,
+                target_name,
+                target_len: target_seq.len(),
+                target_start: 0,
+                target_end: cigar_target_len.min(target_seq.len()),
+                alignment: &alignment,
+            };
+            
+            let mut output = output.lock().unwrap();
+            write_paf_record(&mut *output, &record)?;
         }
     }
 
