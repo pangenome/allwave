@@ -47,31 +47,31 @@ pub struct AlignmentResult {
 fn cigar_bytes_to_string(cigar_bytes: &[u8]) -> String {
     let mut cigar_str = String::new();
     let mut i = 0;
-    
+
     while i < cigar_bytes.len() {
         let op = cigar_bytes[i];
         let mut count = 1;
         let mut j = i + 1;
-        
+
         // Count consecutive same operations
         while j < cigar_bytes.len() && cigar_bytes[j] == op {
             count += 1;
             j += 1;
         }
-        
+
         // Convert to CIGAR format
         let op_char = match op {
-            b'M' => '=',    // Match
-            b'X' => 'X',    // Mismatch
-            b'I' => 'I',    // Insertion
-            b'D' => 'D',    // Deletion
+            b'M' => '=', // Match
+            b'X' => 'X', // Mismatch
+            b'I' => 'I', // Insertion
+            b'D' => 'D', // Deletion
             _ => '?',
         };
-        
+
         cigar_str.push_str(&format!("{count}{op_char}"));
         i = j;
     }
-    
+
     cigar_str
 }
 
@@ -80,7 +80,7 @@ fn count_cigar_operations(cigar_bytes: &[u8]) -> (usize, usize, usize, usize, us
     let mut mismatches = 0;
     let mut insertions = 0;
     let mut deletions = 0;
-    
+
     for &op in cigar_bytes {
         match op {
             b'M' => matches += 1,
@@ -90,7 +90,7 @@ fn count_cigar_operations(cigar_bytes: &[u8]) -> (usize, usize, usize, usize, us
             _ => {}
         }
     }
-    
+
     let alignment_length = matches + mismatches;
     (matches, mismatches, insertions, deletions, alignment_length)
 }
@@ -106,7 +106,7 @@ pub fn align_sequences(
         AlignmentMode::EditDistance => {
             // For edit distance, gap_open = gap_ext = mismatch
             AffineWavefronts::with_penalties(
-                0,  // match
+                0, // match
                 penalties.mismatch,
                 penalties.mismatch, // gap_opening = mismatch for edit distance
                 penalties.mismatch, // gap_extension = mismatch for edit distance
@@ -115,7 +115,7 @@ pub fn align_sequences(
         AlignmentMode::SinglePieceAffine => {
             // Single-piece affine gap penalties
             AffineWavefronts::with_penalties(
-                0,  // match
+                0, // match
                 penalties.mismatch,
                 penalties.gap_opening1,
                 penalties.gap_extension1,
@@ -124,7 +124,7 @@ pub fn align_sequences(
         AlignmentMode::TwoPieceAffine => {
             // Two-piece affine gap penalties
             AffineWavefronts::with_penalties_affine2p(
-                0,  // match
+                0, // match
                 penalties.mismatch,
                 penalties.gap_opening1,
                 penalties.gap_extension1,
@@ -133,18 +133,18 @@ pub fn align_sequences(
             )
         }
     };
-    
+
     // Perform alignment
     let status = wf.align(pattern, text);
-    
+
     match status {
         AlignmentStatus::Completed => {
             let score = wf.score();
             let cigar_bytes = wf.cigar();
             let cigar = cigar_bytes_to_string(cigar_bytes);
-            let (matches, mismatches, insertions, deletions, alignment_length) = 
+            let (matches, mismatches, insertions, deletions, alignment_length) =
                 count_cigar_operations(cigar_bytes);
-            
+
             Ok(AlignmentResult {
                 score,
                 cigar,

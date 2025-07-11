@@ -1,4 +1,4 @@
-use crate::validation::{parse_cigar, calculate_alignment_stats, CigarOp, ValidationResult};
+use crate::validation::{calculate_alignment_stats, parse_cigar, CigarOp, ValidationResult};
 use std::collections::HashMap;
 
 /// Simple validation that just checks CIGAR correctness
@@ -12,45 +12,52 @@ pub fn validate_alignment_simple(
     if fields.len() < 12 {
         return Err("Invalid PAF format".into());
     }
-    
+
     let query_start = fields[2].parse::<usize>()?;
     let query_end = fields[3].parse::<usize>()?;
     let strand = fields[4].chars().next().ok_or("No strand found")?;
     let target_start = fields[7].parse::<usize>()?;
     let target_end = fields[8].parse::<usize>()?;
-    
+
     // Find CIGAR string
-    let cigar_str = fields.iter()
+    let cigar_str = fields
+        .iter()
         .find(|f| f.starts_with("cg:Z:"))
         .ok_or("No CIGAR string found")?
         .trim_start_matches("cg:Z:");
-    
+
     let cigar_ops = parse_cigar(cigar_str);
     let stats = calculate_alignment_stats(&cigar_ops);
-    
+
     // Apply strand orientation to query if needed
     let oriented_query = if strand == '-' {
         reverse_complement(query_seq)
     } else {
         query_seq.to_vec()
     };
-    
+
     // Debug print
-    println!("  Validating alignment: query {}..{} (oriented len {}), target {}..{} (len {})",
-             query_start, query_end, oriented_query.len(), 
-             target_start, target_end, target_seq.len());
-    
+    println!(
+        "  Validating alignment: query {}..{} (oriented len {}), target {}..{} (len {})",
+        query_start,
+        query_end,
+        oriented_query.len(),
+        target_start,
+        target_end,
+        target_seq.len()
+    );
+
     // Verify alignment
     let alignment_correct = verify_cigar_correctness(
         &oriented_query[query_start..query_end],
         &target_seq[target_start..target_end],
         &cigar_ops,
     );
-    
+
     // Calculate coverage
     let query_coverage = (query_end - query_start) as f64 / query_seq.len() as f64;
     let target_coverage = (target_end - target_start) as f64 / target_seq.len() as f64;
-    
+
     Ok(ValidationResult {
         alignment_stats: stats,
         query_coverage,
@@ -63,14 +70,10 @@ pub fn validate_alignment_simple(
     })
 }
 
-fn verify_cigar_correctness(
-    query_seq: &[u8],
-    target_seq: &[u8],
-    cigar_ops: &[CigarOp],
-) -> bool {
+fn verify_cigar_correctness(query_seq: &[u8], target_seq: &[u8], cigar_ops: &[CigarOp]) -> bool {
     let mut q_pos = 0;
     let mut t_pos = 0;
-    
+
     for op in cigar_ops {
         match op {
             CigarOp::Match(len) => {
@@ -81,19 +84,26 @@ fn verify_cigar_correctness(
                 }
                 for i in 0..len {
                     if query_seq[q_pos + i] != target_seq[t_pos + i] {
-                        eprintln!("Mismatch in = operation at positions q:{}, t:{}: {} != {}", 
-                                 q_pos + i, t_pos + i, 
-                                 query_seq[q_pos + i] as char, 
-                                 target_seq[t_pos + i] as char);
+                        eprintln!(
+                            "Mismatch in = operation at positions q:{}, t:{}: {} != {}",
+                            q_pos + i,
+                            t_pos + i,
+                            query_seq[q_pos + i] as char,
+                            target_seq[t_pos + i] as char
+                        );
                         // Print context
                         let q_start = q_pos.saturating_sub(5);
                         let q_end = (q_pos + i + 5).min(query_seq.len());
                         let t_start = t_pos.saturating_sub(5);
                         let t_end = (t_pos + i + 5).min(target_seq.len());
-                        eprintln!("  Query context:  {}", 
-                                 String::from_utf8_lossy(&query_seq[q_start..q_end]));
-                        eprintln!("  Target context: {}", 
-                                 String::from_utf8_lossy(&target_seq[t_start..t_end]));
+                        eprintln!(
+                            "  Query context:  {}",
+                            String::from_utf8_lossy(&query_seq[q_start..q_end])
+                        );
+                        eprintln!(
+                            "  Target context: {}",
+                            String::from_utf8_lossy(&target_seq[t_start..t_end])
+                        );
                         return false;
                     }
                 }
@@ -129,18 +139,23 @@ fn verify_cigar_correctness(
             }
         }
     }
-    
+
     // Check that we consumed the right amount of sequence
     if q_pos != query_seq.len() || t_pos != target_seq.len() {
-        println!("  CIGAR consumed: query {}/{}, target {}/{}", 
-                  q_pos, query_seq.len(), t_pos, target_seq.len());
+        println!(
+            "  CIGAR consumed: query {}/{}, target {}/{}",
+            q_pos,
+            query_seq.len(),
+            t_pos,
+            target_seq.len()
+        );
         // For global alignments, we should consume all bases
         if q_pos != query_seq.len() || t_pos != target_seq.len() {
             eprintln!("  ERROR: CIGAR doesn't account for full alignment");
             return false;
         }
     }
-    
+
     println!("  Alignment validation: PASSED");
     true
 }
