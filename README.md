@@ -16,6 +16,7 @@ A high-performance pairwise sequence aligner using bidirectional wavefront align
 
 - Rust 1.70 or later
 - Git (for fetching dependencies)
+- Linux operating system (macOS support is planned for future releases)
 
 ### Building from Source
 
@@ -26,6 +27,8 @@ cargo build --release
 ```
 
 The binary will be available at `target/release/allwave`.
+
+**Note**: Currently, AllWave only supports Linux due to OpenMP dependencies in the WFA2 library. macOS and Windows support is planned for future releases.
 
 ## Usage
 
