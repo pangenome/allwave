@@ -9,6 +9,7 @@ A high-performance pairwise sequence aligner using bidirectional wavefront align
 - **Automatic Orientation Detection**: Uses edit distance to determine the best orientation (forward/reverse complement) for alignment
 - **PAF Output Format**: Generates standard PAF (Pairwise Alignment Format) output compatible with downstream tools
 - **Multi-sequence Support**: Aligns all pairs of sequences in a FASTA file
+- **Gzipped Input Support**: Automatically detects and handles gzipped FASTA files (.fa.gz)
 
 ## Installation
 
@@ -56,6 +57,9 @@ allwave --input sequences.fa --scores "0,5,8,1"
 
 # Use custom two-piece affine gap penalties
 allwave --input sequences.fa --scores "0,5,10,2,30,1"
+
+# Process gzipped FASTA file
+allwave --input sequences.fa.gz --output alignments.paf
 ```
 
 ## Alignment Parameters

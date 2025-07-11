@@ -1,7 +1,8 @@
 use bio::io::fasta;
 use clap::Parser;
+use flate2::read::GzDecoder;
 use std::fs::File;
-use std::io::{self, BufReader, Write};
+use std::io::{self, Write};
 use std::path::PathBuf;
 
 mod wfa;
@@ -172,16 +173,29 @@ fn main() -> io::Result<()> {
         Box::new(io::stdout())
     };
 
-    // Read FASTA file
-    let file = File::open(&args.input)?;
-    let reader = BufReader::new(file);
-    let fasta_reader = fasta::Reader::new(reader);
-
-    // Load all sequences
+    // Read FASTA file (handle both plain and gzipped)
     let mut sequences = Vec::new();
-    for result in fasta_reader.records() {
-        let record = result?;
-        sequences.push((record.id().to_string(), record.seq().to_vec()));
+    
+    // Check if file is gzipped by extension and read accordingly
+    if args.input.extension().and_then(|s| s.to_str()) == Some("gz") {
+        // Handle gzipped file
+        let file = File::open(&args.input)?;
+        let decoder = GzDecoder::new(file);
+        let fasta_reader = fasta::Reader::new(decoder);
+        
+        for result in fasta_reader.records() {
+            let record = result?;
+            sequences.push((record.id().to_string(), record.seq().to_vec()));
+        }
+    } else {
+        // Handle plain file
+        let file = File::open(&args.input)?;
+        let fasta_reader = fasta::Reader::new(file);
+        
+        for result in fasta_reader.records() {
+            let record = result?;
+            sequences.push((record.id().to_string(), record.seq().to_vec()));
+        }
     }
 
     // Parse alignment parameters
@@ -205,7 +219,7 @@ fn main() -> io::Result<()> {
 
             // Choose the better orientation
             let (seq_to_align, strand) = if fwd_dist <= rev_dist {
-                (query_seq.clone(), '+')
+                (query_seq.to_vec(), '+')
             } else {
                 (rev_seq, '-')
             };
