@@ -1,4 +1,6 @@
-use lib_wfa2::affine_wavefront::{AffineWavefronts, AlignmentStatus};
+use lib_wfa2::affine_wavefront::{
+    AffineWavefronts, AlignmentStatus, AlignmentScope, AlignmentSpan, MemoryMode, HeuristicStrategy
+};
 use std::error::Error;
 use std::fmt;
 
@@ -60,11 +62,15 @@ fn cigar_bytes_to_string(cigar_bytes: &[u8]) -> String {
         }
 
         // Convert to CIGAR format
+        // IMPORTANT: WFA2 uses opposite convention for I/D operations!
+        // WFA2: I = consume reference, D = consume query
+        // Standard: I = consume query, D = consume reference
+        // So we swap them here
         let op_char = match op {
-            b'M' => '=', // Match
+            b'M' => 'M', // Match/mismatch (alignment)
             b'X' => 'X', // Mismatch
-            b'I' => 'I', // Insertion
-            b'D' => 'D', // Deletion
+            b'I' => 'D', // WFA2 'I' means standard 'D'
+            b'D' => 'I', // WFA2 'D' means standard 'I'
             _ => '?',
         };
 
@@ -85,14 +91,81 @@ fn count_cigar_operations(cigar_bytes: &[u8]) -> (usize, usize, usize, usize, us
         match op {
             b'M' => matches += 1,
             b'X' => mismatches += 1,
-            b'I' => insertions += 1,
-            b'D' => deletions += 1,
+            // WFA2 uses opposite convention - swap I and D
+            b'I' => deletions += 1,  // WFA2 'I' means standard 'D'
+            b'D' => insertions += 1, // WFA2 'D' means standard 'I'
             _ => {}
         }
     }
 
     let alignment_length = matches + mismatches;
     (matches, mismatches, insertions, deletions, alignment_length)
+}
+
+pub fn validate_cigar_alignment(
+    cigar: &[u8],
+    query: &[u8],
+    reference: &[u8],
+) -> Result<(), String> {
+    let mut q_pos = 0;
+    let mut r_pos = 0;
+    
+    // IMPORTANT: WFA2 CIGAR describes transforming reference into query
+    // This is opposite of standard CIGAR convention!
+    // In WFA2: I = insert from query, D = delete from reference
+    for &op in cigar {
+        match op {
+            b'M' | b'=' | b'X' => {
+                if q_pos >= query.len() || r_pos >= reference.len() {
+                    return Err(format!(
+                        "CIGAR extends beyond sequences at M/=/X op: q_pos={}, r_pos={}, query_len={}, ref_len={}",
+                        q_pos, r_pos, query.len(), reference.len()
+                    ));
+                }
+                q_pos += 1;
+                r_pos += 1;
+            }
+            b'I' => {
+                // In WFA2: I means consume reference (opposite of standard)
+                if r_pos >= reference.len() {
+                    return Err(format!(
+                        "CIGAR extends beyond reference at I op: r_pos={}, ref_len={}",
+                        r_pos, reference.len()
+                    ));
+                }
+                r_pos += 1;
+            }
+            b'D' => {
+                // In WFA2: D means consume query (opposite of standard)
+                if q_pos >= query.len() {
+                    return Err(format!(
+                        "CIGAR extends beyond query at D op: q_pos={}, query_len={}",
+                        q_pos, query.len()
+                    ));
+                }
+                q_pos += 1;
+            }
+            _ => {
+                return Err(format!("Invalid CIGAR operation: {} (0x{:02x})", op as char, op));
+            }
+        }
+    }
+    
+    if q_pos != query.len() {
+        return Err(format!(
+            "CIGAR doesn't cover full query: {} vs {}",
+            q_pos, query.len()
+        ));
+    }
+    
+    if r_pos != reference.len() {
+        return Err(format!(
+            "CIGAR doesn't cover full reference: {} vs {}",
+            r_pos, reference.len()
+        ));
+    }
+    
+    Ok(())
 }
 
 pub fn align_sequences(
@@ -102,7 +175,7 @@ pub fn align_sequences(
     mode: AlignmentMode,
 ) -> Result<AlignmentResult, AlignmentError> {
     // Create wavefront aligner based on mode
-    let wf = match mode {
+    let mut wf = match mode {
         AlignmentMode::EditDistance => {
             // For edit distance, gap_open = gap_ext = mismatch
             AffineWavefronts::with_penalties(
@@ -134,6 +207,12 @@ pub fn align_sequences(
         }
     };
 
+    // Critical configuration settings for reliable global alignment
+    wf.set_alignment_scope(AlignmentScope::Alignment);
+    wf.set_alignment_span(AlignmentSpan::End2End);
+    wf.set_memory_mode(MemoryMode::Ultralow);
+    wf.set_heuristic(&HeuristicStrategy::None);
+
     // Perform alignment
     let status = wf.align(pattern, text);
 
@@ -141,6 +220,14 @@ pub fn align_sequences(
         AlignmentStatus::Completed => {
             let score = wf.score();
             let cigar_bytes = wf.cigar();
+            
+            // Validate CIGAR before using it
+            if let Err(e) = validate_cigar_alignment(cigar_bytes, pattern, text) {
+                return Err(AlignmentError {
+                    message: format!("CIGAR validation failed: {}", e),
+                });
+            }
+            
             let cigar = cigar_bytes_to_string(cigar_bytes);
             let (matches, mismatches, insertions, deletions, alignment_length) =
                 count_cigar_operations(cigar_bytes);

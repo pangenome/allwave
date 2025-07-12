@@ -169,6 +169,77 @@ fn parse_cigar_lengths(cigar: &str) -> (usize, usize) {
     (query_len, target_len)
 }
 
+#[allow(dead_code)]
+fn truncate_cigar_to_bounds(cigar: &str, max_query: usize, max_target: usize) -> String {
+    let mut result = String::new();
+    let mut query_pos = 0;
+    let mut target_pos = 0;
+    let mut num_str = String::new();
+    
+    for ch in cigar.chars() {
+        if ch.is_ascii_digit() {
+            num_str.push(ch);
+        } else {
+            if let Ok(count) = num_str.parse::<usize>() {
+                let mut actual_count = count;
+                
+                match ch {
+                    '=' | 'X' => {
+                        // Check if this operation would exceed bounds
+                        let query_space = max_query.saturating_sub(query_pos);
+                        let target_space = max_target.saturating_sub(target_pos);
+                        actual_count = actual_count.min(query_space).min(target_space);
+                        
+                        if actual_count > 0 {
+                            result.push_str(&format!("{}{}", actual_count, ch));
+                            query_pos += actual_count;
+                            target_pos += actual_count;
+                        }
+                        
+                        // If we've reached the limit, stop processing
+                        if query_pos >= max_query || target_pos >= max_target {
+                            break;
+                        }
+                    }
+                    'I' => {
+                        let query_space = max_query.saturating_sub(query_pos);
+                        actual_count = actual_count.min(query_space);
+                        
+                        if actual_count > 0 {
+                            result.push_str(&format!("{}{}", actual_count, ch));
+                            query_pos += actual_count;
+                        }
+                        
+                        if query_pos >= max_query {
+                            break;
+                        }
+                    }
+                    'D' => {
+                        let target_space = max_target.saturating_sub(target_pos);
+                        actual_count = actual_count.min(target_space);
+                        
+                        if actual_count > 0 {
+                            result.push_str(&format!("{}{}", actual_count, ch));
+                            target_pos += actual_count;
+                        }
+                        
+                        if target_pos >= max_target {
+                            break;
+                        }
+                    }
+                    _ => {
+                        // Unknown operation, include as-is
+                        result.push_str(&format!("{}{}", count, ch));
+                    }
+                }
+            }
+            num_str.clear();
+        }
+    }
+    
+    result
+}
+
 fn write_paf_record(out: &mut dyn Write, record: &PafRecord) -> io::Result<()> {
     let query_aligned_len = record.query_end - record.query_start;
     let target_aligned_len = record.target_end - record.target_start;
@@ -292,25 +363,18 @@ fn main() -> io::Result<()> {
             let (query_name, query_seq) = &sequences[i];
             let (target_name, target_seq) = &sequences[j];
             
-            let (cigar_query_len, cigar_target_len) = parse_cigar_lengths(&alignment.cigar);
-            
-            // For reverse strand alignments, we need to adjust the query coordinates
-            let (query_start, query_end) = if strand == '-' {
-                (query_seq.len().saturating_sub(cigar_query_len), query_seq.len())
-            } else {
-                (0, cigar_query_len.min(query_seq.len()))
-            };
+            let (query_end, target_end) = parse_cigar_lengths(&alignment.cigar);
             
             let record = PafRecord {
                 query_name,
                 query_len: query_seq.len(),
-                query_start,
+                query_start: 0,
                 query_end,
                 query_strand: strand,
                 target_name,
                 target_len: target_seq.len(),
                 target_start: 0,
-                target_end: cigar_target_len.min(target_seq.len()),
+                target_end,
                 alignment: &alignment,
             };
             
