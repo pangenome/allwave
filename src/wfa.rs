@@ -67,7 +67,7 @@ fn cigar_bytes_to_string(cigar_bytes: &[u8]) -> String {
         // Standard: I = consume query, D = consume reference
         // So we swap them here
         let op_char = match op {
-            b'M' => 'M', // Match/mismatch (alignment)
+            b'M' => '=', // Match (WFA2 uses M for exact match)
             b'X' => 'X', // Mismatch
             b'I' => 'D', // WFA2 'I' means standard 'D'
             b'D' => 'I', // WFA2 'D' means standard 'I'
@@ -178,31 +178,34 @@ pub fn align_sequences(
     let mut wf = match mode {
         AlignmentMode::EditDistance => {
             // For edit distance, gap_open = gap_ext = mismatch
-            AffineWavefronts::with_penalties(
+            AffineWavefronts::with_penalties_and_memory_mode(
                 0, // match
                 penalties.mismatch,
                 penalties.mismatch, // gap_opening = mismatch for edit distance
                 penalties.mismatch, // gap_extension = mismatch for edit distance
+                MemoryMode::Ultralow,
             )
         }
         AlignmentMode::SinglePieceAffine => {
             // Single-piece affine gap penalties
-            AffineWavefronts::with_penalties(
+            AffineWavefronts::with_penalties_and_memory_mode(
                 0, // match
                 penalties.mismatch,
                 penalties.gap_opening1,
                 penalties.gap_extension1,
+                MemoryMode::Ultralow,
             )
         }
         AlignmentMode::TwoPieceAffine => {
-            // Two-piece affine gap penalties
-            AffineWavefronts::with_penalties_affine2p(
+            // Two-piece affine gap penalties with ultralow memory mode
+            AffineWavefronts::with_penalties_affine2p_and_memory_mode(
                 0, // match
                 penalties.mismatch,
                 penalties.gap_opening1,
                 penalties.gap_extension1,
                 penalties.gap_opening2,
                 penalties.gap_extension2,
+                MemoryMode::Ultralow,
             )
         }
     };
@@ -210,7 +213,6 @@ pub fn align_sequences(
     // Critical configuration settings for reliable global alignment
     wf.set_alignment_scope(AlignmentScope::Alignment);
     wf.set_alignment_span(AlignmentSpan::End2End);
-    wf.set_memory_mode(MemoryMode::Ultralow);
     wf.set_heuristic(&HeuristicStrategy::None);
 
     // Perform alignment

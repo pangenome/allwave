@@ -149,7 +149,7 @@ fn parse_cigar_lengths(cigar: &str) -> (usize, usize) {
         } else {
             if let Ok(count) = num_str.parse::<usize>() {
                 match ch {
-                    '=' | 'X' => {
+                    '=' | 'X' | 'M' => {
                         query_len += count;
                         target_len += count;
                     }

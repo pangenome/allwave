@@ -466,7 +466,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 [[package]]
 name = "lib_wfa2"
 version = "0.1.0"
-source = "git+https://github.com/AndreaGuarracino/lib_wfa2?rev=879c59adc1ffe67056ba38b7a27adf33d3595348#879c59adc1ffe67056ba38b7a27adf33d3595348"
+source = "git+https://github.com/ekg/lib_wfa2?rev=819b82cd842aabedcb962fd5b82380fe454234f6#819b82cd842aabedcb962fd5b82380fe454234f6"
 
 [[package]]
 name = "libc"
