@@ -17,3 +17,55 @@ flate2 = "1.0"
 lib_wfa2 = { git = "https://github.com/ekg/lib_wfa2", rev = "819b82cd842aabedcb962fd5b82380fe454234f6" }
 rand = "0.8"
 rayon = "1.8"
+
+# Debug binaries - not built by default
+# To build these, use: cargo build --bin <name>
+# To run these, use: cargo run --bin <name>
+[[bin]]
+name = "check_wfa_ops"
+path = "tests/debug/check_wfa_ops.rs"
+required-features = ["debug-bins"]
+
+[[bin]]
+name = "debug_align"
+path = "tests/debug/debug_align.rs"
+required-features = ["debug-bins"]
+
+[[bin]]
+name = "debug_cigar"
+path = "tests/debug/debug_cigar.rs"
+required-features = ["debug-bins"]
+
+[[bin]]
+name = "debug_problem"
+path = "tests/debug/debug_problem.rs"
+required-features = ["debug-bins"]
+
+[[bin]]
+name = "debug_wfa"
+path = "tests/debug/debug_wfa.rs"
+required-features = ["debug-bins"]
+
+[[bin]]
+name = "test_allwave"
+path = "tests/debug/test_allwave.rs"
+required-features = ["debug-bins"]
+
+[[bin]]
+name = "test_cigar_interpretation"
+path = "tests/debug/test_cigar_interpretation.rs"
+required-features = ["debug-bins"]
+
+[[bin]]
+name = "test_wfa_order"
+path = "tests/debug/test_wfa_order.rs"
+required-features = ["debug-bins"]
+
+[[bin]]
+name = "verify_memory_mode"
+path = "tests/debug/verify_memory_mode.rs"
+required-features = ["debug-bins"]
+
+[features]
+# Feature flag to enable debug binaries
+debug-bins = []
