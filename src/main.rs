@@ -1,5 +1,6 @@
 use bio::io::fasta;
 use clap::Parser;
+use edlib_rs::edlibrs::*;
 use flate2::read::GzDecoder;
 use rayon::prelude::*;
 use std::fs::File;
@@ -89,41 +90,6 @@ fn reverse_complement(seq: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-fn edit_distance(seq1: &[u8], seq2: &[u8], max_dist: usize) -> usize {
-    let len1 = seq1.len().min(1000); // Sample first 1000bp for speed
-    let len2 = seq2.len().min(1000);
-
-    let mut current = vec![0; len2 + 1];
-    let mut previous = vec![0; len2 + 1];
-
-    // Initialize first row
-    for (j, prev) in previous.iter_mut().enumerate().take(len2 + 1) {
-        *prev = j;
-    }
-
-    for i in 1..=len1 {
-        current[0] = i;
-        let mut min_in_row = i;
-
-        for j in 1..=len2 {
-            let cost = if seq1[i - 1] == seq2[j - 1] { 0 } else { 1 };
-            current[j] = std::cmp::min(
-                std::cmp::min(previous[j] + 1, current[j - 1] + 1),
-                previous[j - 1] + cost,
-            );
-            min_in_row = min_in_row.min(current[j]);
-        }
-
-        // Early termination if all values exceed max_dist
-        if min_in_row > max_dist {
-            return max_dist + 1;
-        }
-
-        std::mem::swap(&mut current, &mut previous);
-    }
-
-    previous[len2]
-}
 
 struct PafRecord<'a> {
     query_name: &'a str,
@@ -326,19 +292,31 @@ fn main() -> io::Result<()> {
             let (query_name, query_seq) = &sequences[i];
             let (target_name, target_seq) = &sequences[j];
 
-            // Check both orientations using edit distance
-            let fwd_dist = edit_distance(query_seq, target_seq, 100);
+            // Check both orientations using edlib for fast edit distance
+            let config = EdlibAlignConfigRs {
+                k: -1,  // No limit on edit distance
+                mode: EdlibAlignModeRs::EDLIB_MODE_NW,  // Global alignment
+                task: EdlibAlignTaskRs::EDLIB_TASK_DISTANCE,  // Just get distance, no alignment path
+                additionalequalities: &[],  // No additional equalities
+            };
+            
+            // Get edit distance for forward orientation
+            let fwd_result = edlibAlignRs(query_seq, target_seq, &config);
+            let fwd_distance = fwd_result.editDistance;
+            
+            // Get edit distance for reverse complement orientation
             let rev_seq = reverse_complement(query_seq);
-            let rev_dist = edit_distance(&rev_seq, target_seq, 100);
-
-            // Choose the better orientation
-            let (seq_to_align, strand) = if fwd_dist <= rev_dist {
+            let rev_result = edlibAlignRs(&rev_seq, target_seq, &config);
+            let rev_distance = rev_result.editDistance;
+            
+            // Choose the better orientation based on edit distance
+            let (seq_to_align, strand) = if fwd_distance <= rev_distance {
                 (query_seq.to_vec(), '+')
             } else {
                 (rev_seq, '-')
             };
 
-            // Perform alignment
+            // Now perform the actual alignment with user-specified parameters
             match align_sequences(&seq_to_align, target_seq, &penalties, alignment_mode) {
                 Ok(alignment) => {
                     Some((i, j, strand, alignment))

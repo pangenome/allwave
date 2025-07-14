@@ -13,6 +13,7 @@ categories = ["science", "command-line-utilities"]
 [dependencies]
 bio = "1.4"
 clap = { version = "4.4", features = ["derive"] }
+edlib_rs = "0.1"
 flate2 = "1.0"
 lib_wfa2 = { git = "https://github.com/ekg/lib_wfa2", rev = "819b82cd842aabedcb962fd5b82380fe454234f6" }
 rand = "0.8"
