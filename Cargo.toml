@@ -2,10 +2,10 @@
 name = "allwave"
 version = "0.1.0"
 edition = "2021"
-authors = ["AllWave Contributors"]
+authors = ["Erik Garrison"]
 description = "High-performance pairwise sequence aligner using bidirectional wavefront alignment"
 license = "MIT"
-repository = "https://github.com/yourusername/allwave"
+repository = "https://github.com/pangenome/allwave"
 readme = "README.md"
 keywords = ["bioinformatics", "alignment", "wavefront", "genomics"]
 categories = ["science", "command-line-utilities"]

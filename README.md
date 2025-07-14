@@ -24,7 +24,7 @@ A high-performance pairwise sequence aligner using bidirectional wavefront align
 ### Building from Source
 
 ```bash
-git clone https://github.com/yourusername/allwave.git
+git clone https://github.com/pangenome/allwave.git
 cd allwave
 cargo build --release
 ```
@@ -76,7 +76,7 @@ AllWave can be used as a library in your Rust projects. Add it to your `Cargo.to
 
 ```toml
 [dependencies]
-allwave = { git = "https://github.com/yourusername/allwave.git" }
+allwave = { git = "https://github.com/pangenome/allwave.git" }
 ```
 
 #### Basic Usage
@@ -260,6 +260,8 @@ AllWave is optimized for speed using:
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+Copyright (c) 2025 Erik Garrison
 
 ## Acknowledgments
 
