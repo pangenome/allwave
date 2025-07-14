@@ -10,6 +10,14 @@ readme = "README.md"
 keywords = ["bioinformatics", "alignment", "wavefront", "genomics"]
 categories = ["science", "command-line-utilities"]
 
+[lib]
+name = "allwave"
+path = "src/lib.rs"
+
+[[bin]]
+name = "allwave"
+path = "src/main.rs"
+
 [dependencies]
 bio = "1.4"
 clap = { version = "4.4", features = ["derive"] }

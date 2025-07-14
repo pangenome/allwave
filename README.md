@@ -1,15 +1,17 @@
 # AllWave
 
-A high-performance pairwise sequence aligner using bidirectional wavefront alignment (biWFA) with two-piece affine gap penalties.
+A high-performance pairwise sequence aligner using bidirectional wavefront alignment (biWFA) with two-piece affine gap penalties. Available as both a command-line tool and a Rust library.
 
 ## Features
 
 - **Bidirectional Wavefront Alignment**: Uses the WFA2-lib library for efficient sequence alignment
 - **Two-piece Affine Gap Penalties**: Supports complex gap penalty models with two different gap extension penalties
-- **Automatic Orientation Detection**: Uses edit distance to determine the best orientation (forward/reverse complement) for alignment
+- **Automatic Orientation Detection**: Uses fast edit distance (via edlib) to determine the best orientation (forward/reverse complement) for alignment
 - **PAF Output Format**: Generates standard PAF (Pairwise Alignment Format) output compatible with downstream tools
 - **Multi-sequence Support**: Aligns all pairs of sequences in a FASTA file
 - **Gzipped Input Support**: Automatically detects and handles gzipped FASTA files (.fa.gz)
+- **Multithreading Support**: Parallel alignment processing with configurable thread count
+- **Library API**: Use AllWave's alignment capabilities in your own Rust projects
 
 ## Installation
 
@@ -33,15 +35,18 @@ The binary will be available at `target/release/allwave`.
 
 ## Usage
 
+### Command Line Tool
+
 ```bash
-allwave --input <FASTA_FILE> [--output <PAF_FILE>] [--scores <SCORES>]
+allwave --input <FASTA_FILE> [--output <PAF_FILE>] [--scores <SCORES>] [--threads <N>]
 ```
 
-### Options
+#### Options
 
 - `-i, --input <FILE>`: Input FASTA file containing sequences to align (required)
 - `-o, --output <FILE>`: Output PAF file (default: stdout)
 - `-s, --scores <SCORES>`: Alignment scoring parameters (default: "0,5,8,2,24,1")
+- `-t, --threads <N>`: Number of threads to use for parallel processing (default: 1)
 
 ### Examples
 
@@ -60,6 +65,108 @@ allwave --input sequences.fa --scores "0,5,10,2,30,1"
 
 # Process gzipped FASTA file
 allwave --input sequences.fa.gz --output alignments.paf
+
+# Use multiple threads for faster processing
+allwave --input sequences.fa --output alignments.paf --threads 8
+```
+
+### Library API
+
+AllWave can be used as a library in your Rust projects. Add it to your `Cargo.toml`:
+
+```toml
+[dependencies]
+allwave = { git = "https://github.com/yourusername/allwave.git" }
+```
+
+#### Basic Usage
+
+```rust
+use allwave::{AllPairIterator, Sequence, AlignmentParams, alignment_to_paf};
+
+// Load your sequences
+let sequences = vec![
+    Sequence {
+        id: "seq1".to_string(),
+        seq: b"ACGTACGTACGT".to_vec(),
+    },
+    Sequence {
+        id: "seq2".to_string(), 
+        seq: b"ACGTACGTTCGT".to_vec(),
+    },
+];
+
+// Set alignment parameters
+let params = AlignmentParams {
+    match_score: 0,
+    mismatch_penalty: 5,
+    gap_open: 8,
+    gap_extend: 2,
+    gap2_open: Some(24),
+    gap2_extend: Some(1),
+    max_divergence: None,
+};
+
+// Create iterator for all-vs-all alignments
+let aligner = AllPairIterator::new(&sequences, params);
+
+// Process alignments
+for alignment in aligner {
+    println!("Aligned {} to {} with score {}", 
+             sequences[alignment.query_idx].id,
+             sequences[alignment.target_idx].id,
+             alignment.score);
+    
+    // Convert to PAF format if needed
+    let paf_line = alignment_to_paf(&alignment, &sequences);
+    println!("{}", paf_line);
+}
+```
+
+#### Parallel Processing
+
+```rust
+use rayon::prelude::*;
+
+// Convert to parallel iterator for faster processing
+let aligner = AllPairIterator::new(&sequences, params);
+let results: Vec<_> = aligner
+    .into_par_iter()
+    .map(|alignment| alignment_to_paf(&alignment, &sequences))
+    .collect();
+```
+
+#### Sparsification
+
+For large datasets, you can use sparsification to reduce the number of alignments:
+
+```rust
+use allwave::SparsificationStrategy;
+
+// Keep only 30% of pairs randomly
+let aligner = AllPairIterator::with_options(
+    &sequences, 
+    params,
+    true,  // exclude self-alignments
+    SparsificationStrategy::Random(0.3)
+);
+
+// Or use automatic sparsification based on sequence count
+let aligner = AllPairIterator::with_options(
+    &sequences,
+    params, 
+    true,
+    SparsificationStrategy::Auto
+);
+```
+
+#### Custom Orientation Parameters
+
+```rust
+// Use custom parameters for orientation detection
+let orientation_params = AlignmentParams::edit_distance();
+let aligner = AllPairIterator::new(&sequences, params)
+    .with_orientation_params(orientation_params);
 ```
 
 ## Alignment Parameters
@@ -145,8 +252,10 @@ AllWave is optimized for speed using:
 ## Dependencies
 
 - [bio](https://github.com/rust-bio/rust-bio) - Bioinformatics library for Rust
-- [lib_wfa2](https://github.com/AndreaGuarracino/lib_wfa2) - Rust bindings for WFA2-lib
+- [lib_wfa2](https://github.com/ekg/lib_wfa2) - Rust bindings for WFA2-lib
+- [edlib_rs](https://github.com/jean-pierreBoth/edlib-rs) - Rust bindings for edlib (fast edit distance)
 - [clap](https://github.com/clap-rs/clap) - Command line argument parsing
+- [rayon](https://github.com/rayon-rs/rayon) - Data parallelism library
 
 ## License
 
