@@ -76,7 +76,7 @@ pub fn parse_scores(scores_str: &str) -> Result<AlignmentParams, String> {
         .split(',')
         .map(|s| s.trim().parse::<i32>())
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to parse scores: {}", e))?;
+        .map_err(|e| format!("Failed to parse scores: {e}"))?;
 
     match scores.len() {
         4 => {

@@ -8,8 +8,8 @@ use lib_wfa2::affine_wavefront::{
 use std::cell::RefCell;
 
 thread_local! {
-    static WFA_ALIGNER: RefCell<Option<AffineWavefronts>> = RefCell::new(None);
-    static WFA_ORIENTATION: RefCell<Option<AffineWavefronts>> = RefCell::new(None);
+    static WFA_ALIGNER: RefCell<Option<AffineWavefronts>> = const { RefCell::new(None) };
+    static WFA_ORIENTATION: RefCell<Option<AffineWavefronts>> = const { RefCell::new(None) };
 }
 
 /// Perform alignment between two sequences
@@ -176,7 +176,7 @@ fn perform_wfa_alignment(
                 })
             }
             _ => Err(AlignmentError {
-                message: format!("Alignment failed with status: {:?}", status),
+                message: format!("Alignment failed with status: {status:?}"),
             }),
         }
     })
@@ -255,7 +255,7 @@ pub fn cigar_bytes_to_string(cigar_bytes: &[u8]) -> String {
             _ => '?',
         };
 
-        cigar_str.push_str(&format!("{}{}", count, op_char));
+        cigar_str.push_str(&format!("{count}{op_char}"));
         i = j;
     }
 

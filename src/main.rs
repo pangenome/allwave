@@ -38,7 +38,7 @@ fn main() -> io::Result<()> {
     rayon::ThreadPoolBuilder::new()
         .num_threads(args.threads)
         .build_global()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(io::Error::other)?;
 
     // Read FASTA file (handle both plain and gzipped)
     let mut sequences = Vec::new();
@@ -92,7 +92,7 @@ fn main() -> io::Result<()> {
     };
 
     for record in paf_records {
-        writeln!(output, "{}", record)?;
+        writeln!(output, "{record}")?;
     }
 
     Ok(())

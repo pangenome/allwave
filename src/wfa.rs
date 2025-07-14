@@ -226,7 +226,7 @@ pub fn align_sequences(
             // Validate CIGAR before using it
             if let Err(e) = validate_cigar_alignment(cigar_bytes, pattern, text) {
                 return Err(AlignmentError {
-                    message: format!("CIGAR validation failed: {}", e),
+                    message: format!("CIGAR validation failed: {e}"),
                 });
             }
             
