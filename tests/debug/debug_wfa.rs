@@ -1,9 +1,9 @@
 //! General WFA2 debugging tool
-//! 
+//!
 //! Purpose: A flexible debugging tool that can analyze alignments from any FASTA
 //! file. Tests alignments in both orientations and provides detailed CIGAR analysis.
 //! This was one of the main tools used to understand WFA2's behavior.
-//! 
+//!
 //! Usage: cargo run --bin debug_wfa <fasta_file>
 
 use bio::io::fasta;
@@ -48,7 +48,13 @@ fn main() {
 
             // Create aligner with two-piece affine and ultralow memory
             let mut aligner = AffineWavefronts::with_penalties_affine2p_and_memory_mode(
-                0, 5, 8, 2, 24, 1, MemoryMode::Ultralow
+                0,
+                5,
+                8,
+                2,
+                24,
+                1,
+                MemoryMode::Ultralow,
             );
 
             // Set critical configuration
@@ -118,8 +124,16 @@ fn main() {
                             _ => {}
                         }
                     }
-                    println!("Swapped CIGAR covers query: {} / {}", query_pos2, seq2.len());
-                    println!("Swapped CIGAR covers reference: {} / {}", ref_pos2, seq1.len());
+                    println!(
+                        "Swapped CIGAR covers query: {} / {}",
+                        query_pos2,
+                        seq2.len()
+                    );
+                    println!(
+                        "Swapped CIGAR covers reference: {} / {}",
+                        ref_pos2,
+                        seq1.len()
+                    );
                 }
             }
         }

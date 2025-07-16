@@ -1,11 +1,11 @@
 //! Allwave - High-performance pairwise sequence aligner
-//! 
+//!
 //! This library provides efficient all-vs-all sequence alignment using
 //! bidirectional wavefront alignment (biWFA).
 
-pub mod types;
 pub mod alignment;
 pub mod iterator;
+pub mod types;
 
 // Keep existing modules for compatibility
 pub mod test_framework;
@@ -15,32 +15,32 @@ pub mod validation_simple;
 pub mod wfa;
 
 // Re-export main types and functions
-pub use types::{
-    AlignmentError, AlignmentMode, AlignmentParams, AlignmentResult, 
-    Sequence, SparsificationStrategy
-};
-pub use iterator::{AllPairIterator, AllPairParallelIterator};
 pub use alignment::{cigar_bytes_to_string, reverse_complement};
+pub use iterator::{AllPairIterator, AllPairParallelIterator};
+pub use types::{
+    AlignmentError, AlignmentMode, AlignmentParams, AlignmentResult, Sequence,
+    SparsificationStrategy,
+};
 
 /// Process all-vs-all alignments with a callback for streaming results
-/// 
+///
 /// # Arguments
 /// * `sequences` - Vector of sequences to align
 /// * `params` - Alignment parameters
 /// * `sparsification` - Sparsification strategy
 /// * `callback` - Function called for each alignment result
-/// 
+///
 /// # Example
 /// ```
 /// use allwave::{process_alignments_with_callback, Sequence, AlignmentParams, SparsificationStrategy};
-/// 
+///
 /// let sequences = vec![
 ///     Sequence { id: "seq1".to_string(), seq: b"ATCG".to_vec() },
 ///     Sequence { id: "seq2".to_string(), seq: b"CGTA".to_vec() },
 /// ];
-/// 
+///
 /// let params = AlignmentParams::edit_distance();
-/// 
+///
 /// process_alignments_with_callback(
 ///     &sequences,
 ///     params,
@@ -65,33 +65,30 @@ where
 }
 
 /// Format alignment result as PAF record
-pub fn alignment_to_paf(
-    result: &AlignmentResult,
-    sequences: &[Sequence],
-) -> String {
+pub fn alignment_to_paf(result: &AlignmentResult, sequences: &[Sequence]) -> String {
     let query = &sequences[result.query_idx];
     let target = &sequences[result.target_idx];
-    
+
     let query_len = query.seq.len();
     let target_len = target.seq.len();
-    
+
     let query_aligned_len = result.query_end - result.query_start;
     let target_aligned_len = result.target_end - result.target_start;
     let block_len = target_aligned_len.max(query_aligned_len);
-    
+
     // Calculate identity
     let identity = if result.alignment_length > 0 {
         result.num_matches as f64 / result.alignment_length as f64
     } else {
         0.0
     };
-    
+
     // Convert CIGAR bytes to string
     let cigar = cigar_bytes_to_string(&result.cigar_bytes);
-    
+
     // Determine strand
     let strand = if result.is_reverse { '-' } else { '+' };
-    
+
     format!(
         "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\tgi:f:{:.6}\tcg:Z:{}",
         query.id,
@@ -179,9 +176,15 @@ mod tests {
     #[test]
     fn test_alignment_mode_detection() {
         let edit_params = AlignmentParams::edit_distance();
-        assert!(matches!(AlignmentMode::from_params(&edit_params), AlignmentMode::EditDistance));
+        assert!(matches!(
+            AlignmentMode::from_params(&edit_params),
+            AlignmentMode::EditDistance
+        ));
 
         let two_piece = parse_scores("0,5,8,2,24,1").unwrap();
-        assert!(matches!(AlignmentMode::from_params(&two_piece), AlignmentMode::TwoPieceAffine));
+        assert!(matches!(
+            AlignmentMode::from_params(&two_piece),
+            AlignmentMode::TwoPieceAffine
+        ));
     }
 }

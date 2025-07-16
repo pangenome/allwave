@@ -1,10 +1,10 @@
 //! Test CIGAR I/D operation interpretation
-//! 
+//!
 //! Purpose: Specifically tests our fix for WFA2's opposite convention for I/D
 //! operations. WFA2 uses I to mean "consume reference" and D to mean "consume
 //! query", which is opposite to the standard CIGAR convention. This test
 //! verifies our swap is working correctly.
-//! 
+//!
 //! Usage: cargo run --bin test_cigar_interpretation
 
 use lib_wfa2::affine_wavefront::{
@@ -13,8 +13,8 @@ use lib_wfa2::affine_wavefront::{
 
 fn main() {
     // Test with sequences where we know the expected result
-    let query = b"ACGTACGT";     // 8 bases
-    let reference = b"ACGTACGT";  // 8 bases - identical
+    let query = b"ACGTACGT"; // 8 bases
+    let reference = b"ACGTACGT"; // 8 bases - identical
 
     println!("=== Test 1: Identical sequences ===");
     println!("Query:     {}", std::str::from_utf8(query).unwrap());
@@ -37,11 +37,19 @@ fn main() {
 
     // Test 2: Query has extra bases at end
     println!("\n=== Test 2: Query longer than reference ===");
-    let query2 = b"ACGTACGTAA";    // 10 bases
-    let reference2 = b"ACGTACGT";   // 8 bases
+    let query2 = b"ACGTACGTAA"; // 10 bases
+    let reference2 = b"ACGTACGT"; // 8 bases
 
-    println!("Query:     {} (len={})", std::str::from_utf8(query2).unwrap(), query2.len());
-    println!("Reference: {} (len={})", std::str::from_utf8(reference2).unwrap(), reference2.len());
+    println!(
+        "Query:     {} (len={})",
+        std::str::from_utf8(query2).unwrap(),
+        query2.len()
+    );
+    println!(
+        "Reference: {} (len={})",
+        std::str::from_utf8(reference2).unwrap(),
+        reference2.len()
+    );
 
     let status2 = aligner.align(query2, reference2);
     if matches!(status2, AlignmentStatus::Completed) {
@@ -51,7 +59,7 @@ fn main() {
             print!("{}", op as char);
         }
         println!("\nExpected: 8M2I (8 matches, 2 insertions from query)");
-        
+
         // Count ops
         let mut m_count = 0;
         let mut i_count = 0;
@@ -69,11 +77,19 @@ fn main() {
 
     // Test 3: Reference longer than query
     println!("\n=== Test 3: Reference longer than query ===");
-    let query3 = b"ACGTACGT";      // 8 bases
+    let query3 = b"ACGTACGT"; // 8 bases
     let reference3 = b"ACGTACGTAA"; // 10 bases
 
-    println!("Query:     {} (len={})", std::str::from_utf8(query3).unwrap(), query3.len());
-    println!("Reference: {} (len={})", std::str::from_utf8(reference3).unwrap(), reference3.len());
+    println!(
+        "Query:     {} (len={})",
+        std::str::from_utf8(query3).unwrap(),
+        query3.len()
+    );
+    println!(
+        "Reference: {} (len={})",
+        std::str::from_utf8(reference3).unwrap(),
+        reference3.len()
+    );
 
     let status3 = aligner.align(query3, reference3);
     if matches!(status3, AlignmentStatus::Completed) {
@@ -83,7 +99,7 @@ fn main() {
             print!("{}", op as char);
         }
         println!("\nExpected: 8M2D (8 matches, 2 deletions from reference)");
-        
+
         // Count ops
         let mut m_count = 0;
         let mut i_count = 0;

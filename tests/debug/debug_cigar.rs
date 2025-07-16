@@ -1,9 +1,9 @@
 //! Debug CIGAR interpretation for I/D operations
-//! 
+//!
 //! Purpose: Tests our understanding of WFA2's CIGAR convention where I and D
 //! operations are swapped compared to standard CIGAR format. This was crucial
 //! for fixing the pafcheck validation failures.
-//! 
+//!
 //! Usage: cargo run --bin debug_cigar
 
 use lib_wfa2::affine_wavefront::{
@@ -13,14 +13,28 @@ use lib_wfa2::affine_wavefront::{
 fn main() {
     // Create two sequences of different lengths
     let seq1 = b"ACGTACGTACGT"; // 12 bases
-    let seq2 = b"ACGTACGTAC";   // 10 bases
+    let seq2 = b"ACGTACGTAC"; // 10 bases
 
-    println!("Seq1: {} (len={})", std::str::from_utf8(seq1).unwrap(), seq1.len());
-    println!("Seq2: {} (len={})", std::str::from_utf8(seq2).unwrap(), seq2.len());
+    println!(
+        "Seq1: {} (len={})",
+        std::str::from_utf8(seq1).unwrap(),
+        seq1.len()
+    );
+    println!(
+        "Seq2: {} (len={})",
+        std::str::from_utf8(seq2).unwrap(),
+        seq2.len()
+    );
 
     // Create aligner
     let mut aligner = AffineWavefronts::with_penalties_affine2p_and_memory_mode(
-        0, 5, 8, 2, 24, 1, MemoryMode::Ultralow
+        0,
+        5,
+        8,
+        2,
+        24,
+        1,
+        MemoryMode::Ultralow,
     );
     aligner.set_alignment_scope(AlignmentScope::Alignment);
     aligner.set_alignment_span(AlignmentSpan::End2End);

@@ -1,9 +1,9 @@
 //! Debug specific problematic alignments
-//! 
+//!
 //! Purpose: Investigates alignment issues with specific sequences from x.fa that
 //! were failing pafcheck validation. This tool helped identify that WFA2 was
 //! producing CIGARs that extended beyond sequence boundaries.
-//! 
+//!
 //! Usage: cargo run --bin debug_problem
 //! Expects: x.fa file in current directory
 
@@ -34,7 +34,13 @@ fn main() {
 
     // Create aligner
     let mut aligner = AffineWavefronts::with_penalties_affine2p_and_memory_mode(
-        0, 5, 8, 2, 24, 1, MemoryMode::Ultralow
+        0,
+        5,
+        8,
+        2,
+        24,
+        1,
+        MemoryMode::Ultralow,
     );
     aligner.set_alignment_scope(AlignmentScope::Alignment);
     aligner.set_alignment_span(AlignmentSpan::End2End);
@@ -79,19 +85,22 @@ fn main() {
             }
 
             if q_pos > seq1.len() || r_pos > seq2.len() {
-                println!("\nIssue at CIGAR position {}: op={} ({})", i, op as char, op);
+                println!(
+                    "\nIssue at CIGAR position {}: op={} ({})",
+                    i, op as char, op
+                );
                 println!("Query position: {} / {}", q_pos, seq1.len());
                 println!("Reference position: {} / {}", r_pos, seq2.len());
-                
+
                 // Show context
                 if i >= 5 {
                     print!("Previous 5 ops: ");
-                    for j in (i-5)..i {
+                    for j in (i - 5)..i {
                         print!("{}", cigar[j] as char);
                     }
                     println!();
                 }
-                
+
                 break;
             }
         }

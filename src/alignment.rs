@@ -23,7 +23,7 @@ pub fn align_pair(
 ) -> AlignmentResult {
     // Determine best orientation using edlib
     let (query_seq, is_reverse) = determine_orientation(&query.seq, &target.seq);
-    
+
     // Perform the actual alignment with WFA2
     match perform_wfa_alignment(&query_seq, &target.seq, params) {
         Ok(mut result) => {
@@ -54,21 +54,21 @@ pub fn align_pair(
 /// Determine best orientation for alignment using fast edit distance
 fn determine_orientation(query: &[u8], target: &[u8]) -> (Vec<u8>, bool) {
     let config = EdlibAlignConfigRs {
-        k: -1,  // No limit on edit distance
-        mode: EdlibAlignModeRs::EDLIB_MODE_NW,  // Global alignment
-        task: EdlibAlignTaskRs::EDLIB_TASK_DISTANCE,  // Just get distance
+        k: -1,                                       // No limit on edit distance
+        mode: EdlibAlignModeRs::EDLIB_MODE_NW,       // Global alignment
+        task: EdlibAlignTaskRs::EDLIB_TASK_DISTANCE, // Just get distance
         additionalequalities: &[],
     };
-    
+
     // Get edit distance for forward orientation
     let fwd_result = edlibAlignRs(query, target, &config);
     let fwd_distance = fwd_result.editDistance;
-    
+
     // Get edit distance for reverse complement orientation
     let rev_seq = reverse_complement(query);
     let rev_result = edlibAlignRs(&rev_seq, target, &config);
     let rev_distance = rev_result.editDistance;
-    
+
     // Choose the better orientation
     if fwd_distance <= rev_distance {
         (query.to_vec(), false)
@@ -99,11 +99,11 @@ fn perform_wfa_alignment(
     params: &AlignmentParams,
 ) -> Result<AlignmentResult, AlignmentError> {
     let mode = AlignmentMode::from_params(params);
-    
+
     // Create or reuse WFA2 aligner
     WFA_ALIGNER.with(|aligner_cell| {
         let mut aligner_opt = aligner_cell.borrow_mut();
-        
+
         let wf = match &mut *aligner_opt {
             Some(wf) => wf,
             None => {
@@ -143,24 +143,24 @@ fn perform_wfa_alignment(
                 aligner_opt.as_mut().unwrap()
             }
         };
-        
+
         // Configure aligner
         wf.set_alignment_scope(AlignmentScope::Alignment);
         wf.set_alignment_span(AlignmentSpan::End2End);
         wf.set_heuristic(&HeuristicStrategy::None);
-        
+
         // Perform alignment
         let status = wf.align(query, target);
-        
+
         match status {
             AlignmentStatus::Completed => {
                 let score = wf.score();
                 let cigar_bytes = wf.cigar().to_vec();
-                
+
                 // Validate and process CIGAR
                 let (num_matches, alignment_length) = count_cigar_operations(&cigar_bytes);
                 let (query_end, target_end) = parse_cigar_lengths(&cigar_bytes);
-                
+
                 Ok(AlignmentResult {
                     query_idx: 0,  // Will be set by caller
                     target_idx: 0, // Will be set by caller
@@ -186,7 +186,7 @@ fn perform_wfa_alignment(
 fn count_cigar_operations(cigar_bytes: &[u8]) -> (usize, usize) {
     let mut matches = 0;
     let mut alignment_length = 0;
-    
+
     for &op in cigar_bytes {
         match op {
             b'M' => {
@@ -199,7 +199,7 @@ fn count_cigar_operations(cigar_bytes: &[u8]) -> (usize, usize) {
             _ => {}
         }
     }
-    
+
     (matches, alignment_length)
 }
 
@@ -207,7 +207,7 @@ fn count_cigar_operations(cigar_bytes: &[u8]) -> (usize, usize) {
 fn parse_cigar_lengths(cigar_bytes: &[u8]) -> (usize, usize) {
     let mut query_len = 0;
     let mut target_len = 0;
-    
+
     // WFA2 uses opposite convention for I/D operations
     for &op in cigar_bytes {
         match op {
@@ -226,7 +226,7 @@ fn parse_cigar_lengths(cigar_bytes: &[u8]) -> (usize, usize) {
             _ => {}
         }
     }
-    
+
     (query_len, target_len)
 }
 

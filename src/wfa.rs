@@ -1,5 +1,5 @@
 use lib_wfa2::affine_wavefront::{
-    AffineWavefronts, AlignmentStatus, AlignmentScope, AlignmentSpan, MemoryMode, HeuristicStrategy
+    AffineWavefronts, AlignmentScope, AlignmentSpan, AlignmentStatus, HeuristicStrategy, MemoryMode,
 };
 use std::error::Error;
 use std::fmt;
@@ -109,7 +109,7 @@ pub fn validate_cigar_alignment(
 ) -> Result<(), String> {
     let mut q_pos = 0;
     let mut r_pos = 0;
-    
+
     // IMPORTANT: WFA2 CIGAR describes transforming reference into query
     // This is opposite of standard CIGAR convention!
     // In WFA2: I = insert from query, D = delete from reference
@@ -130,7 +130,8 @@ pub fn validate_cigar_alignment(
                 if r_pos >= reference.len() {
                     return Err(format!(
                         "CIGAR extends beyond reference at I op: r_pos={}, ref_len={}",
-                        r_pos, reference.len()
+                        r_pos,
+                        reference.len()
                     ));
                 }
                 r_pos += 1;
@@ -140,31 +141,37 @@ pub fn validate_cigar_alignment(
                 if q_pos >= query.len() {
                     return Err(format!(
                         "CIGAR extends beyond query at D op: q_pos={}, query_len={}",
-                        q_pos, query.len()
+                        q_pos,
+                        query.len()
                     ));
                 }
                 q_pos += 1;
             }
             _ => {
-                return Err(format!("Invalid CIGAR operation: {} (0x{:02x})", op as char, op));
+                return Err(format!(
+                    "Invalid CIGAR operation: {} (0x{:02x})",
+                    op as char, op
+                ));
             }
         }
     }
-    
+
     if q_pos != query.len() {
         return Err(format!(
             "CIGAR doesn't cover full query: {} vs {}",
-            q_pos, query.len()
+            q_pos,
+            query.len()
         ));
     }
-    
+
     if r_pos != reference.len() {
         return Err(format!(
             "CIGAR doesn't cover full reference: {} vs {}",
-            r_pos, reference.len()
+            r_pos,
+            reference.len()
         ));
     }
-    
+
     Ok(())
 }
 
@@ -222,14 +229,14 @@ pub fn align_sequences(
         AlignmentStatus::Completed => {
             let score = wf.score();
             let cigar_bytes = wf.cigar();
-            
+
             // Validate CIGAR before using it
             if let Err(e) = validate_cigar_alignment(cigar_bytes, pattern, text) {
                 return Err(AlignmentError {
                     message: format!("CIGAR validation failed: {e}"),
                 });
             }
-            
+
             let cigar = cigar_bytes_to_string(cigar_bytes);
             let (matches, mismatches, insertions, deletions, alignment_length) =
                 count_cigar_operations(cigar_bytes);

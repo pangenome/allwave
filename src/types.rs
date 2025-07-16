@@ -15,21 +15,21 @@ pub struct AlignmentResult {
     /// Indices into the original sequence array
     pub query_idx: usize,
     pub target_idx: usize,
-    
+
     /// Alignment coordinates (0-based)
     pub query_start: usize,
     pub query_end: usize,
     pub target_start: usize,
     pub target_end: usize,
-    
+
     /// Orientation - true if query was reverse-complemented
     pub is_reverse: bool,
-    
+
     /// Alignment details
-    pub cigar_bytes: Vec<u8>,       // Raw CIGAR from WFA2
-    pub score: i32,                  // WFA2 score (lower is better)
-    pub num_matches: usize,          // Number of matching bases
-    pub alignment_length: usize,     // Total alignment length
+    pub cigar_bytes: Vec<u8>, // Raw CIGAR from WFA2
+    pub score: i32,              // WFA2 score (lower is better)
+    pub num_matches: usize,      // Number of matching bases
+    pub alignment_length: usize, // Total alignment length
 }
 
 /// Parameters for sequence alignment
@@ -82,8 +82,8 @@ pub enum SparsificationStrategy {
     Random(f64),
     /// Automatic sparsification based on sequence count (legacy)
     Auto,
-    /// Erdős-Rényi random graph connectivity with given probability
-    /// that the graph is connected (single giant component)
+    /// Erdős-Rényi random graph with given probability that the graph
+    /// maintains a single giant component (connected component)
     Connectivity(f64),
 }
 
@@ -100,7 +100,8 @@ impl AlignmentMode {
     pub fn from_params(params: &AlignmentParams) -> Self {
         if params.gap2_open.is_some() && params.gap2_extend.is_some() {
             AlignmentMode::TwoPieceAffine
-        } else if params.gap_open == params.gap_extend && params.gap_open == params.mismatch_penalty {
+        } else if params.gap_open == params.gap_extend && params.gap_open == params.mismatch_penalty
+        {
             AlignmentMode::EditDistance
         } else {
             AlignmentMode::SinglePieceAffine

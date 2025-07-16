@@ -21,6 +21,7 @@ dependencies = [
 name = "allwave"
 version = "0.1.0"
 dependencies = [
+ "atty",
  "bio",
  "clap 4.5.41",
  "edlib_rs",

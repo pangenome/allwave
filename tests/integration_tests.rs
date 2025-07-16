@@ -477,10 +477,12 @@ fn test_reverse_complement_alignment() {
     )
     .unwrap();
 
-    // Run allwave
+    // Run allwave with no sparsification to ensure all pairs are computed
     let output = Command::new("./target/debug/allwave")
         .arg("--input")
         .arg(fasta_path)
+        .arg("-p")
+        .arg("none")
         .output()
         .expect("Failed to run allwave");
 
@@ -787,10 +789,12 @@ fn test_multiple_sequence_pairs() {
         writeln!(file, "{}", String::from_utf8_lossy(seq)).unwrap();
     }
 
-    // Run allwave
+    // Run allwave with no sparsification to ensure all pairs are computed
     let output = Command::new("./target/debug/allwave")
         .arg("--input")
         .arg(fasta_path)
+        .arg("-p")
+        .arg("none")
         .output()
         .unwrap();
 
