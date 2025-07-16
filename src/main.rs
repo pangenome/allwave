@@ -172,6 +172,7 @@ fn main() -> io::Result<()> {
     // Create progress tracking
     let completed = Arc::new(AtomicUsize::new(0));
     let start_time = Instant::now();
+    let last_log_time = Arc::new(std::sync::Mutex::new(Instant::now()));
 
     // Create progress bar for interactive mode only
     let progress = if args.no_progress {
@@ -189,6 +190,7 @@ fn main() -> io::Result<()> {
     };
 
     let progress_clone = progress.clone();
+    let last_log_time_clone = last_log_time.clone();
 
     // Create channel for streaming PAF records
     let (tx, rx) = mpsc::channel::<String>();
@@ -233,8 +235,25 @@ fn main() -> io::Result<()> {
                 // Interactive mode: update progress bar every alignment
                 progress_clone.set_position(current as u64);
             } else {
-                // File mode: log occasionally to stderr
-                if current.is_multiple_of(1000) || current == total_pairs {
+                // File mode: log at most once per second
+                let should_log = if current == total_pairs {
+                    true // Always log completion
+                } else {
+                    // Check if at least 1 second has passed since last log
+                    if let Ok(mut last_log) = last_log_time_clone.try_lock() {
+                        let now = Instant::now();
+                        if now.duration_since(*last_log).as_secs() >= 1 {
+                            *last_log = now;
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                };
+
+                if should_log {
                     let elapsed = start_time.elapsed();
                     let percentage = (current as f64 / total_pairs as f64) * 100.0;
                     let rate = current as f64 / elapsed.as_secs_f64();
