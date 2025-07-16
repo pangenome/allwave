@@ -28,6 +28,7 @@ lib_wfa2 = { git = "https://github.com/ekg/lib_wfa2", rev = "819b82cd842aabedcb9
 rand = "0.8"
 rayon = "1.8"
 tempfile = "3.0"
+atty = "0.2"
 
 # Debug binaries - not built by default
 # To build these, use: cargo build --bin <name>

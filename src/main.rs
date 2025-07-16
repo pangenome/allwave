@@ -3,12 +3,13 @@ use bio::io::fasta;
 use clap::Parser;
 use faigz_rs::{FastaFormat, FastaIndex, FastaReader};
 use indicatif::{ProgressBar, ProgressStyle};
-use rayon::prelude::*;
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::mpsc;
+use std::time::Instant;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -29,9 +30,14 @@ struct Args {
     #[arg(short, long, default_value = "1")]
     threads: usize,
     
-    /// Sparsification strategy: none, random:<fraction>, or auto
+    /// Sparsification strategy: none, random:<fraction>, auto, or connectivity:<probability>
     #[arg(short = 'p', long, default_value = "none")]
     sparsification: String,
+    
+    /// Probability of graph connectivity for Erdős-Rényi sparsification (0.0 to 1.0)
+    /// Higher values ensure better connectivity but require more alignments
+    #[arg(long, default_value = "0.99")]
+    giant_prob: f64,
     
     /// Disable progress bar output
     #[arg(long)]
@@ -55,13 +61,24 @@ fn main() -> io::Result<()> {
     let sparsification = match args.sparsification.as_str() {
         "none" => SparsificationStrategy::None,
         "auto" => SparsificationStrategy::Auto,
+        "connectivity" => SparsificationStrategy::Connectivity(args.giant_prob),
         s if s.starts_with("random:") => {
             let fraction_str = &s[7..];
             let fraction: f64 = fraction_str.parse()
                 .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid random fraction"))?;
             SparsificationStrategy::Random(fraction)
         }
-        _ => return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid sparsification strategy")),
+        s if s.starts_with("connectivity:") => {
+            let prob_str = &s[13..];
+            let prob: f64 = prob_str.parse()
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid connectivity probability"))?;
+            if prob <= 0.0 || prob >= 1.0 {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "Connectivity probability must be between 0 and 1"));
+            }
+            SparsificationStrategy::Connectivity(prob)
+        }
+        _ => return Err(io::Error::new(io::ErrorKind::InvalidInput, 
+            "Invalid sparsification strategy. Use: none, auto, connectivity, random:<fraction>, or connectivity:<probability>")),
     };
     
     // Read FASTA file (handle both plain and gzipped)
@@ -116,57 +133,106 @@ fn main() -> io::Result<()> {
     // Get actual number of pairs to process
     let total_pairs = aligner.pair_count();
 
-    // Create progress bar (if enabled)
+    // Determine if we're in interactive mode (output to terminal, not file)
+    let is_interactive = args.output.is_none() && atty::is(atty::Stream::Stderr);
+    
+    // Create progress tracking
+    let completed = Arc::new(AtomicUsize::new(0));
+    let start_time = Instant::now();
+    
+    // Create progress bar for interactive mode only
     let progress = if args.no_progress {
         ProgressBar::hidden()
-    } else {
+    } else if is_interactive {
         let pb = ProgressBar::new(total_pairs as u64);
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} ({percent}%) {per_sec} ETA: {eta}")
+                .template("{elapsed_precise} {pos}/{len} ({percent}%)")
                 .unwrap()
-                .progress_chars("=>-")
         );
-        pb.set_message("Aligning sequences");
         pb
+    } else {
+        ProgressBar::hidden()
     };
 
-    // Create atomic counter for progress updates
-    let completed = Arc::new(AtomicUsize::new(0));
     let progress_clone = progress.clone();
     
-    // Convert to parallel iterator and collect results
-    let paf_records: Vec<String> = aligner
-        .into_par_iter()
-        .map(|alignment| {
-            let result = alignment_to_paf(&alignment, &sequences);
+    // Create channel for streaming PAF records
+    let (tx, rx) = mpsc::channel::<String>();
+    
+    // Spawn writer thread
+    let writer_handle = if let Some(output_path) = args.output {
+        let output_path = output_path.clone();
+        std::thread::spawn(move || -> io::Result<()> {
+            let mut output = File::create(output_path)?;
+            for paf_record in rx {
+                writeln!(output, "{}", paf_record)?;
+            }
+            Ok(())
+        })
+    } else {
+        std::thread::spawn(move || -> io::Result<()> {
+            let mut output = io::stdout();
+            for paf_record in rx {
+                writeln!(output, "{}", paf_record)?;
+            }
+            Ok(())
+        })
+    };
+    
+    // Process alignments with streaming callback
+    let result = aligner
+        .for_each_with_callback(|alignment| {
+            let paf_record = alignment_to_paf(&alignment, &sequences);
             
-            // Update progress atomically (only if progress bar is enabled)
+            // Send PAF record through channel
+            tx.send(paf_record).map_err(|e| {
+                Box::new(std::io::Error::new(std::io::ErrorKind::BrokenPipe, e.to_string())) as Box<dyn std::error::Error + Send + Sync>
+            })?;
+            
+            // Update progress
             if !args.no_progress {
-                let prev = completed.fetch_add(1, Ordering::Relaxed);
-                if prev % 100 == 0 || prev == total_pairs - 1 {
-                    progress_clone.set_position((prev + 1) as u64);
+                let current = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                
+                if is_interactive {
+                    // Interactive mode: update progress bar every alignment
+                    progress_clone.set_position(current as u64);
+                } else {
+                    // File mode: log occasionally to stderr
+                    if current % 1000 == 0 || current == total_pairs {
+                        let elapsed = start_time.elapsed();
+                        let percentage = (current as f64 / total_pairs as f64) * 100.0;
+                        let rate = current as f64 / elapsed.as_secs_f64();
+                        eprintln!("[{:.1}s] {}/{} ({:.1}%) {:.1} alignments/sec", 
+                                 elapsed.as_secs_f64(), current, total_pairs, percentage, rate);
+                    }
                 }
             }
             
-            result
-        })
-        .collect();
+            Ok(())
+        });
 
-    // Ensure progress bar shows completion
+    // Close the channel to signal writer thread to finish
+    drop(tx);
+    
+    // Handle any errors from the streaming process
+    result.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    
+    // Wait for writer thread to finish
+    writer_handle.join().map_err(|e| {
+        io::Error::new(io::ErrorKind::Other, format!("Writer thread panicked: {:?}", e))
+    })??;
+
+    // Show completion message
     if !args.no_progress {
-        progress.finish_with_message("Alignment complete!");
-    }
-
-    // Write results to output
-    let mut output: Box<dyn Write> = if let Some(output_path) = args.output {
-        Box::new(File::create(output_path)?)
-    } else {
-        Box::new(io::stdout())
-    };
-
-    for record in paf_records {
-        writeln!(output, "{record}")?;
+        let elapsed = start_time.elapsed();
+        if is_interactive {
+            progress.finish_with_message(format!("Completed {} alignments in {:.1}s", total_pairs, elapsed.as_secs_f64()));
+        } else {
+            let rate = total_pairs as f64 / elapsed.as_secs_f64();
+            eprintln!("[{:.1}s] {}/{} (100.0%) {:.1} alignments/sec - Complete!", 
+                     elapsed.as_secs_f64(), total_pairs, total_pairs, rate);
+        }
     }
 
     Ok(())

@@ -22,6 +22,48 @@ pub use types::{
 pub use iterator::{AllPairIterator, AllPairParallelIterator};
 pub use alignment::{cigar_bytes_to_string, reverse_complement};
 
+/// Process all-vs-all alignments with a callback for streaming results
+/// 
+/// # Arguments
+/// * `sequences` - Vector of sequences to align
+/// * `params` - Alignment parameters
+/// * `sparsification` - Sparsification strategy
+/// * `callback` - Function called for each alignment result
+/// 
+/// # Example
+/// ```
+/// use allwave::{process_alignments_with_callback, Sequence, AlignmentParams, SparsificationStrategy};
+/// 
+/// let sequences = vec![
+///     Sequence { id: "seq1".to_string(), seq: b"ATCG".to_vec() },
+///     Sequence { id: "seq2".to_string(), seq: b"CGTA".to_vec() },
+/// ];
+/// 
+/// let params = AlignmentParams::edit_distance();
+/// 
+/// process_alignments_with_callback(
+///     &sequences,
+///     params,
+///     SparsificationStrategy::None,
+///     |alignment| {
+///         println!("Alignment: {} vs {}", alignment.query_idx, alignment.target_idx);
+///         Ok(())
+///     }
+/// ).unwrap();
+/// ```
+pub fn process_alignments_with_callback<F>(
+    sequences: &[Sequence],
+    params: AlignmentParams,
+    sparsification: SparsificationStrategy,
+    callback: F,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+where
+    F: Fn(AlignmentResult) -> Result<(), Box<dyn std::error::Error + Send + Sync>> + Send + Sync,
+{
+    let aligner = AllPairIterator::with_options(sequences, params, true, sparsification);
+    aligner.for_each_with_callback(callback)
+}
+
 /// Format alignment result as PAF record
 pub fn alignment_to_paf(
     result: &AlignmentResult,

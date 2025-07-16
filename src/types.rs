@@ -80,8 +80,11 @@ pub enum SparsificationStrategy {
     None,
     /// Random sampling with given probability
     Random(f64),
-    /// Automatic sparsification based on sequence count
+    /// Automatic sparsification based on sequence count (legacy)
     Auto,
+    /// Erdős-Rényi random graph connectivity with given probability
+    /// that the graph is connected (single giant component)
+    Connectivity(f64),
 }
 
 /// Alignment mode (edit distance, single-piece affine, two-piece affine)
