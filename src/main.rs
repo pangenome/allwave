@@ -1,7 +1,7 @@
-use allwave::{AllPairIterator, Sequence, alignment_to_paf, parse_scores};
+use allwave::{AllPairIterator, Sequence, alignment_to_paf, parse_scores, SparsificationStrategy};
 use bio::io::fasta;
 use clap::Parser;
-use flate2::read::GzDecoder;
+use faigz_rs::{FastaFormat, FastaIndex, FastaReader};
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{self, Write};
@@ -25,6 +25,10 @@ struct Args {
     /// Number of threads to use for parallel processing
     #[arg(short, long, default_value = "1")]
     threads: usize,
+    
+    /// Sparsification strategy: none, random:<fraction>, or auto
+    #[arg(short = 'p', long, default_value = "none")]
+    sparsification: String,
 }
 
 
@@ -40,25 +44,49 @@ fn main() -> io::Result<()> {
         .build_global()
         .map_err(io::Error::other)?;
 
+    // Parse sparsification strategy
+    let sparsification = match args.sparsification.as_str() {
+        "none" => SparsificationStrategy::None,
+        "auto" => SparsificationStrategy::Auto,
+        s if s.starts_with("random:") => {
+            let fraction_str = &s[7..];
+            let fraction: f64 = fraction_str.parse()
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid random fraction"))?;
+            SparsificationStrategy::Random(fraction)
+        }
+        _ => return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid sparsification strategy")),
+    };
+    
     // Read FASTA file (handle both plain and gzipped)
     let mut sequences = Vec::new();
     
     // Check if file is gzipped by extension and read accordingly
     if args.input.extension().and_then(|s| s.to_str()) == Some("gz") {
-        // Handle gzipped file
-        let file = File::open(&args.input)?;
-        let decoder = GzDecoder::new(file);
-        let fasta_reader = fasta::Reader::new(decoder);
+        // Use faigz-rs for gzipped files
+        let index = FastaIndex::new(args.input.to_str().unwrap(), FastaFormat::Fasta)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Failed to load faigz index: {}", e)))?;
         
-        for result in fasta_reader.records() {
-            let record = result?;
-            sequences.push(Sequence {
-                id: record.id().to_string(),
-                seq: record.seq().to_vec(),
-            });
+        let reader = FastaReader::new(&index)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Failed to create faigz reader: {}", e)))?;
+        
+        for i in 0..index.num_sequences() {
+            if let Some(name) = index.sequence_name(i) {
+                match reader.fetch_seq_all(&name) {
+                    Ok(seq_str) => {
+                        sequences.push(Sequence {
+                            id: name.clone(),
+                            seq: seq_str.into_bytes(),
+                        });
+                    }
+                    Err(e) => {
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, 
+                            format!("Failed to read sequence {}: {}", name, e)));
+                    }
+                }
+            }
         }
     } else {
-        // Handle plain file
+        // Handle plain file using bio crate
         let file = File::open(&args.input)?;
         let fasta_reader = fasta::Reader::new(file);
         
@@ -75,8 +103,8 @@ fn main() -> io::Result<()> {
     let params = parse_scores(&args.scores)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
-    // Create the alignment iterator
-    let aligner = AllPairIterator::new(&sequences, params);
+    // Create the alignment iterator with sparsification
+    let aligner = AllPairIterator::with_options(&sequences, params, true, sparsification);
     
     // Convert to parallel iterator and collect results
     let paf_records: Vec<String> = aligner
