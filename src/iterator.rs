@@ -246,14 +246,10 @@ fn apply_random_sparsification(
         let seq_i = &sequences[*i].id;
         let seq_j = &sequences[*j].id;
 
-        // Sort names to ensure symmetry: hash(A,B) == hash(B,A)
-        // This is important for undirected graph interpretation
+        // Create directed pair hash: hash(A,B) != hash(B,A)
+        // This is important because we're dealing with directed alignments
         // Use simple concatenation to avoid potential hasher bias
-        let combined = if seq_i <= seq_j {
-            format!("{seq_i}:{seq_j}")
-        } else {
-            format!("{seq_j}:{seq_i}")
-        };
+        let combined = format!("{seq_i}:{seq_j}");
         
         combined.hash(&mut hasher);
 
