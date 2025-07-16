@@ -21,6 +21,33 @@ A high-performance pairwise sequence aligner using bidirectional wavefront align
 - Git (for fetching dependencies)
 - Linux operating system (macOS support is planned for future releases)
 
+#### System Dependencies
+
+AllWave requires the following system libraries to be installed:
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get update
+sudo apt-get install -y libhts-dev zlib1g-dev libbz2-dev liblzma-dev libcurl4-openssl-dev libssl-dev
+```
+
+**CentOS/RHEL/Fedora:**
+```bash
+# CentOS/RHEL 8+
+sudo dnf install -y htslib-devel zlib-devel bzip2-devel xz-devel libcurl-devel openssl-devel
+
+# CentOS/RHEL 7
+sudo yum install -y htslib-devel zlib-devel bzip2-devel xz-devel libcurl-devel openssl-devel
+```
+
+**macOS:**
+```bash
+# Using Homebrew
+brew install htslib zlib bzip2 xz curl openssl
+```
+
+These dependencies are required for the faigz-rs library which provides gzipped FASTA file support.
+
 ### Building from Source
 
 ```bash
@@ -47,6 +74,11 @@ allwave --input <FASTA_FILE> [--output <PAF_FILE>] [--scores <SCORES>] [--thread
 - `-o, --output <FILE>`: Output PAF file (default: stdout)
 - `-s, --scores <SCORES>`: Alignment scoring parameters (default: "0,5,8,2,24,1")
 - `-t, --threads <N>`: Number of threads to use for parallel processing (default: 1)
+- `-p, --sparsification <STRATEGY>`: Sparsification strategy (default: "giant:0.99")
+  - `none`: Compute all pairwise alignments
+  - `auto`: Use giant component model with 95% probability
+  - `random:<fraction>`: Keep random fraction of pairs (0.0 to 1.0)
+  - `giant:<probability>`: Keep pairs to maintain giant component with given probability
 
 ### Examples
 
@@ -68,6 +100,12 @@ allwave --input sequences.fa.gz --output alignments.paf
 
 # Use multiple threads for faster processing
 allwave --input sequences.fa --output alignments.paf --threads 8
+
+# Use different sparsification strategies
+allwave --input sequences.fa --output alignments.paf -p none  # All pairs
+allwave --input sequences.fa --output alignments.paf -p auto  # Automatic (95% probability)
+allwave --input sequences.fa --output alignments.paf -p giant:0.95  # Giant component with 95% probability
+allwave --input sequences.fa --output alignments.paf -p random:0.5  # Random 50% of pairs
 ```
 
 ### Library API
@@ -151,7 +189,15 @@ let aligner = AllPairIterator::with_options(
     SparsificationStrategy::Random(0.3)
 );
 
-// Or use automatic sparsification based on sequence count
+// Use giant component model with 95% probability
+let aligner = AllPairIterator::with_options(
+    &sequences,
+    params, 
+    true,
+    SparsificationStrategy::Connectivity(0.95)
+);
+
+// Or use automatic sparsification (equivalent to giant:0.95)
 let aligner = AllPairIterator::with_options(
     &sequences,
     params, 
