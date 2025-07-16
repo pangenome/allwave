@@ -2,10 +2,13 @@ use allwave::{AllPairIterator, Sequence, alignment_to_paf, parse_scores, Sparsif
 use bio::io::fasta;
 use clap::Parser;
 use faigz_rs::{FastaFormat, FastaIndex, FastaReader};
+use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -29,6 +32,10 @@ struct Args {
     /// Sparsification strategy: none, random:<fraction>, or auto
     #[arg(short = 'p', long, default_value = "none")]
     sparsification: String,
+    
+    /// Disable progress bar output
+    #[arg(long)]
+    no_progress: bool,
 }
 
 
@@ -106,11 +113,50 @@ fn main() -> io::Result<()> {
     // Create the alignment iterator with sparsification
     let aligner = AllPairIterator::with_options(&sequences, params, true, sparsification);
     
+    // Get actual number of pairs to process
+    let total_pairs = aligner.pair_count();
+
+    // Create progress bar (if enabled)
+    let progress = if args.no_progress {
+        ProgressBar::hidden()
+    } else {
+        let pb = ProgressBar::new(total_pairs as u64);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} ({percent}%) {per_sec} ETA: {eta}")
+                .unwrap()
+                .progress_chars("=>-")
+        );
+        pb.set_message("Aligning sequences");
+        pb
+    };
+
+    // Create atomic counter for progress updates
+    let completed = Arc::new(AtomicUsize::new(0));
+    let progress_clone = progress.clone();
+    
     // Convert to parallel iterator and collect results
     let paf_records: Vec<String> = aligner
         .into_par_iter()
-        .map(|alignment| alignment_to_paf(&alignment, &sequences))
+        .map(|alignment| {
+            let result = alignment_to_paf(&alignment, &sequences);
+            
+            // Update progress atomically (only if progress bar is enabled)
+            if !args.no_progress {
+                let prev = completed.fetch_add(1, Ordering::Relaxed);
+                if prev % 100 == 0 || prev == total_pairs - 1 {
+                    progress_clone.set_position((prev + 1) as u64);
+                }
+            }
+            
+            result
+        })
         .collect();
+
+    // Ensure progress bar shows completion
+    if !args.no_progress {
+        progress.finish_with_message("Alignment complete!");
+    }
 
     // Write results to output
     let mut output: Box<dyn Write> = if let Some(output_path) = args.output {

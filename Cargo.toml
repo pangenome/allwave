@@ -22,6 +22,7 @@ path = "src/main.rs"
 bio = "1.4"
 clap = { version = "4.4", features = ["derive"] }
 edlib_rs = "0.1"
+indicatif = { version = "0.17", features = ["rayon"] }
 faigz-rs = { git = "https://github.com/waveygang/faigz-rs.git", rev = "7a4955e599f0fbfd2392a9db8bdf19ec488a314f" }
 lib_wfa2 = { git = "https://github.com/ekg/lib_wfa2", rev = "819b82cd842aabedcb962fd5b82380fe454234f6" }
 rand = "0.8"

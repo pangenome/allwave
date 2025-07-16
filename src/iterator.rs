@@ -84,6 +84,27 @@ impl<'a> AllPairIterator<'a> {
             pairs,
         }
     }
+    
+    /// Get the actual number of pairs that will be processed
+    pub fn pair_count(&self) -> usize {
+        let n = self.sequences.len();
+        let base_pairs = if self.exclude_self {
+            n * (n - 1)
+        } else {
+            n * n
+        };
+        
+        match &self._sparsification {
+            SparsificationStrategy::None => base_pairs,
+            SparsificationStrategy::Random(keep_fraction) => {
+                (base_pairs as f64 * keep_fraction).round() as usize
+            }
+            SparsificationStrategy::Auto => {
+                let keep_fraction = compute_auto_sparsification(n);
+                (base_pairs as f64 * keep_fraction).round() as usize
+            }
+        }
+    }
 }
 
 impl<'a> Iterator for AllPairIterator<'a> {
