@@ -248,13 +248,14 @@ fn apply_random_sparsification(
 
         // Sort names to ensure symmetry: hash(A,B) == hash(B,A)
         // This is important for undirected graph interpretation
-        if seq_i <= seq_j {
-            seq_i.hash(&mut hasher);
-            seq_j.hash(&mut hasher);
+        // Use simple concatenation to avoid potential hasher bias
+        let combined = if seq_i <= seq_j {
+            format!("{seq_i}:{seq_j}")
         } else {
-            seq_j.hash(&mut hasher);
-            seq_i.hash(&mut hasher);
-        }
+            format!("{seq_j}:{seq_i}")
+        };
+        
+        combined.hash(&mut hasher);
 
         let hash = hasher.finish();
 
