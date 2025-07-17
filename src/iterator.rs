@@ -1,7 +1,7 @@
 //! Iterator for all-vs-all sequence alignments
 
 use crate::alignment::align_pair;
-use crate::knn_graph::{estimate_knn_pair_count, extract_knn_pairs};
+use crate::knn_graph::{estimate_tree_pair_count, extract_tree_pairs};
 use crate::mash::DEFAULT_KMER_SIZE;
 use crate::types::{AlignmentParams, AlignmentResult, Sequence, SparsificationStrategy};
 use rayon::prelude::*;
@@ -57,10 +57,16 @@ impl<'a> AllPairIterator<'a> {
                 let keep_fraction = compute_connectivity_probability(n, *connectivity_prob);
                 pairs = apply_random_sparsification(pairs, keep_fraction, sequences);
             }
-            SparsificationStrategy::NeighborJoining(k_neighbors, random_fraction, kmer_size) => {
-                pairs = extract_knn_pairs(
+            SparsificationStrategy::TreeSampling(
+                k_nearest,
+                k_farthest,
+                random_fraction,
+                kmer_size,
+            ) => {
+                pairs = extract_tree_pairs(
                     sequences,
-                    *k_neighbors,
+                    *k_nearest,
+                    *k_farthest,
                     *random_fraction,
                     kmer_size.unwrap_or(DEFAULT_KMER_SIZE),
                 );
@@ -138,9 +144,12 @@ impl<'a> AllPairIterator<'a> {
                 let keep_fraction = compute_connectivity_probability(n, *connectivity_prob);
                 (base_pairs as f64 * keep_fraction).round() as usize
             }
-            SparsificationStrategy::NeighborJoining(k_neighbors, random_fraction, _kmer_size) => {
-                estimate_knn_pair_count(n, *k_neighbors, *random_fraction)
-            }
+            SparsificationStrategy::TreeSampling(
+                k_nearest,
+                k_farthest,
+                random_fraction,
+                _kmer_size,
+            ) => estimate_tree_pair_count(n, *k_nearest, *k_farthest, *random_fraction),
         }
     }
 }

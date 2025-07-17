@@ -46,7 +46,7 @@ struct Args {
     threads: usize,
 
     /// Sparsification strategy:
-    /// none | auto | random:<frac> | giant:<prob> | nj:<k>:<random>[:<kmer>]
+    /// none | auto | random:<frac> | giant:<prob> | tree:<near>:<far>:<random>[:<kmer>]
     #[arg(short = 'p', long, default_value = "giant:0.99")]
     sparsification: String,
 
@@ -96,27 +96,29 @@ fn main() -> io::Result<()> {
             }
             SparsificationStrategy::Connectivity(prob)
         }
-        s if s.starts_with("nj:") => {
-            let parts: Vec<&str> = s[3..].split(':').collect();
-            if parts.len() < 2 || parts.len() > 3 {
+        s if s.starts_with("tree:") => {
+            let parts: Vec<&str> = s[5..].split(':').collect();
+            if parts.len() < 3 || parts.len() > 4 {
                 return Err(io::Error::new(io::ErrorKind::InvalidInput,
-                    "Invalid neighbor-joining format. Use: nj:<k_neighbors>:<random_fraction>[:<kmer_size>]"));
+                    "Invalid tree format. Use: tree:<k_nearest>:<k_farthest>:<random_fraction>[:<kmer_size>]"));
             }
 
-            let k_neighbors: usize = parts[0].parse()
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid k neighbors count"))?;
-            let random_frac: f64 = parts[1].parse()
+            let k_nearest: usize = parts[0].parse()
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid k nearest count"))?;
+            let k_farthest: usize = parts[1].parse()
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid k farthest count"))?;
+            let random_frac: f64 = parts[2].parse()
                 .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid random fraction"))?;
 
-            if k_neighbors == 0 {
-                return Err(io::Error::new(io::ErrorKind::InvalidInput, "K neighbors must be at least 1"));
+            if k_nearest == 0 && k_farthest == 0 {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "At least one of k_nearest or k_farthest must be greater than 0"));
             }
             if !(0.0..=1.0).contains(&random_frac) {
                 return Err(io::Error::new(io::ErrorKind::InvalidInput, "Random fraction must be between 0 and 1"));
             }
 
-            let kmer_size = if parts.len() == 3 {
-                let k: usize = parts[2].parse()
+            let kmer_size = if parts.len() == 4 {
+                let k: usize = parts[3].parse()
                     .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid k-mer size"))?;
                 if !(3..=31).contains(&k) {
                     return Err(io::Error::new(io::ErrorKind::InvalidInput, "K-mer size must be between 3 and 31"));
@@ -126,10 +128,10 @@ fn main() -> io::Result<()> {
                 None
             };
 
-            SparsificationStrategy::NeighborJoining(k_neighbors, random_frac, kmer_size)
+            SparsificationStrategy::TreeSampling(k_nearest, k_farthest, random_frac, kmer_size)
         }
         _ => return Err(io::Error::new(io::ErrorKind::InvalidInput,
-            "Invalid sparsification strategy. Use: none, auto, giant:<probability>, random:<fraction>, or nj:<k>:<random_frac>[:<kmer_size>]")),
+            "Invalid sparsification strategy. Use: none, auto, giant:<probability>, random:<fraction>, or tree:<near>:<far>:<random>[:<kmer>]")),
     };
 
     // Read FASTA file (handle both plain and gzipped)

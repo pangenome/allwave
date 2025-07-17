@@ -85,12 +85,13 @@ pub enum SparsificationStrategy {
     /// Erdős-Rényi random graph with given probability that the graph
     /// maintains a single giant component (connected component)
     Connectivity(f64),
-    /// K-nearest neighbor sampling with additional random fraction
-    /// Format: NeighborJoining(k_neighbors, random_fraction, kmer_size)
-    /// - k_neighbors: number of nearest neighbors per sequence (1 = tree, higher = denser graph)
+    /// Tree-based sampling with nearest and farthest neighbors plus random fraction
+    /// Format: TreeSampling(k_nearest, k_farthest, random_fraction, kmer_size)
+    /// - k_nearest: number of nearest neighbors per sequence (1 = tree, higher = denser graph)
+    /// - k_farthest: number of farthest neighbors per sequence (strangers for diversity)
     /// - random_fraction: additional random sampling probability  
     /// - kmer_size: k-mer size for mash distance (default 15)
-    NeighborJoining(usize, f64, Option<usize>),
+    TreeSampling(usize, usize, f64, Option<usize>),
 }
 
 /// Alignment mode (edit distance, single-piece affine, two-piece affine)
