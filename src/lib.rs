@@ -5,6 +5,9 @@
 
 pub mod alignment;
 pub mod iterator;
+pub mod knn_graph;
+pub mod mash;
+pub mod neighbor_joining;
 pub mod types;
 
 // Keep existing modules for compatibility

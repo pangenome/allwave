@@ -45,11 +45,8 @@ struct Args {
     #[arg(short, long, default_value = "1")]
     threads: usize,
 
-    /// Sparsification strategy: none, random:<fraction>, auto, or giant:<probability>
-    /// - none: compute all pairwise alignments
-    /// - auto: use giant component model with 95% probability
-    /// - random:<fraction>: keep random fraction of pairs (0.0 to 1.0)
-    /// - giant:<probability>: keep pairs to maintain giant component with given probability
+    /// Sparsification strategy:
+    /// none | auto | random:<frac> | giant:<prob> | nj:<k>:<random>[:<kmer>]
     #[arg(short = 'p', long, default_value = "giant:0.99")]
     sparsification: String,
 
@@ -99,8 +96,40 @@ fn main() -> io::Result<()> {
             }
             SparsificationStrategy::Connectivity(prob)
         }
+        s if s.starts_with("nj:") => {
+            let parts: Vec<&str> = s[3..].split(':').collect();
+            if parts.len() < 2 || parts.len() > 3 {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput,
+                    "Invalid neighbor-joining format. Use: nj:<k_neighbors>:<random_fraction>[:<kmer_size>]"));
+            }
+
+            let k_neighbors: usize = parts[0].parse()
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid k neighbors count"))?;
+            let random_frac: f64 = parts[1].parse()
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid random fraction"))?;
+
+            if k_neighbors == 0 {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "K neighbors must be at least 1"));
+            }
+            if !(0.0..=1.0).contains(&random_frac) {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "Random fraction must be between 0 and 1"));
+            }
+
+            let kmer_size = if parts.len() == 3 {
+                let k: usize = parts[2].parse()
+                    .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Invalid k-mer size"))?;
+                if !(3..=31).contains(&k) {
+                    return Err(io::Error::new(io::ErrorKind::InvalidInput, "K-mer size must be between 3 and 31"));
+                }
+                Some(k)
+            } else {
+                None
+            };
+
+            SparsificationStrategy::NeighborJoining(k_neighbors, random_frac, kmer_size)
+        }
         _ => return Err(io::Error::new(io::ErrorKind::InvalidInput,
-            "Invalid sparsification strategy. Use: none, auto, giant:<probability>, or random:<fraction>")),
+            "Invalid sparsification strategy. Use: none, auto, giant:<probability>, random:<fraction>, or nj:<k>:<random_frac>[:<kmer_size>]")),
     };
 
     // Read FASTA file (handle both plain and gzipped)

@@ -1,6 +1,8 @@
 //! Iterator for all-vs-all sequence alignments
 
 use crate::alignment::align_pair;
+use crate::knn_graph::{estimate_knn_pair_count, extract_knn_pairs};
+use crate::mash::DEFAULT_KMER_SIZE;
 use crate::types::{AlignmentParams, AlignmentResult, Sequence, SparsificationStrategy};
 use rayon::prelude::*;
 use std::collections::hash_map::DefaultHasher;
@@ -54,6 +56,14 @@ impl<'a> AllPairIterator<'a> {
             SparsificationStrategy::Connectivity(connectivity_prob) => {
                 let keep_fraction = compute_connectivity_probability(n, *connectivity_prob);
                 pairs = apply_random_sparsification(pairs, keep_fraction, sequences);
+            }
+            SparsificationStrategy::NeighborJoining(k_neighbors, random_fraction, kmer_size) => {
+                pairs = extract_knn_pairs(
+                    sequences,
+                    *k_neighbors,
+                    *random_fraction,
+                    kmer_size.unwrap_or(DEFAULT_KMER_SIZE),
+                );
             }
         }
 
@@ -127,6 +137,9 @@ impl<'a> AllPairIterator<'a> {
             SparsificationStrategy::Connectivity(connectivity_prob) => {
                 let keep_fraction = compute_connectivity_probability(n, *connectivity_prob);
                 (base_pairs as f64 * keep_fraction).round() as usize
+            }
+            SparsificationStrategy::NeighborJoining(k_neighbors, random_fraction, _kmer_size) => {
+                estimate_knn_pair_count(n, *k_neighbors, *random_fraction)
             }
         }
     }
@@ -250,7 +263,7 @@ fn apply_random_sparsification(
         // This is important because we're dealing with directed alignments
         // Use simple concatenation to avoid potential hasher bias
         let combined = format!("{seq_i}:{seq_j}");
-        
+
         combined.hash(&mut hasher);
 
         let hash = hasher.finish();
