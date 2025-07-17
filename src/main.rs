@@ -53,6 +53,10 @@ struct Args {
     /// Disable progress bar output
     #[arg(long)]
     no_progress: bool,
+
+    /// Output mash distance matrix and exit (for debugging/comparison with mash)
+    #[arg(long)]
+    mash_matrix: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -185,6 +189,20 @@ fn main() -> io::Result<()> {
                 seq: record.seq().to_vec(),
             });
         }
+    }
+
+    // Handle mash matrix output if requested
+    if args.mash_matrix {
+        // Extract k-mer size from sparsification parameter if using tree sampling
+        let kmer_size = match &sparsification {
+            SparsificationStrategy::TreeSampling(_, _, _, Some(k)) => *k,
+            _ => 15, // Default k-mer size
+        };
+
+        // Compute and print mash distance matrix
+        let matrix = allwave::mash::compute_distance_matrix_with_params(&sequences, kmer_size, 1000);
+        allwave::mash::print_distance_matrix(&sequences, &matrix);
+        return Ok(());
     }
 
     // Parse alignment parameters
