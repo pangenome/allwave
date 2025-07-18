@@ -51,8 +51,93 @@ pub fn align_pair(
     }
 }
 
-/// Determine best orientation for alignment using fast edit distance
+/// Determine best orientation for alignment using strand-specific mash distance
 fn determine_orientation(query: &[u8], target: &[u8]) -> (Vec<u8>, bool) {
+    const ORIENTATION_KMER_SIZE: usize = 15;
+    const ORIENTATION_SKETCH_SIZE: usize = 1000;
+    
+    // Create strand-specific sketches (without canonicalization)
+    let target_sketch = sketch_sequence_stranded(target, ORIENTATION_KMER_SIZE, ORIENTATION_SKETCH_SIZE);
+    let fwd_sketch = sketch_sequence_stranded(query, ORIENTATION_KMER_SIZE, ORIENTATION_SKETCH_SIZE);
+    
+    let rev_seq = reverse_complement(query);
+    let rev_sketch = sketch_sequence_stranded(&rev_seq, ORIENTATION_KMER_SIZE, ORIENTATION_SKETCH_SIZE);
+    
+    // Compute Jaccard similarities
+    let fwd_jaccard = jaccard_similarity(&fwd_sketch, &target_sketch);
+    let rev_jaccard = jaccard_similarity(&rev_sketch, &target_sketch);
+    
+    // Choose the better orientation (higher Jaccard = more similar)
+    if fwd_jaccard >= rev_jaccard {
+        (query.to_vec(), false)
+    } else {
+        (rev_seq, true)
+    }
+}
+
+/// Create strand-specific MinHash sketch (no canonicalization)
+fn sketch_sequence_stranded(sequence: &[u8], k: usize, sketch_size: usize) -> Vec<u64> {
+    if sequence.len() < k {
+        return Vec::new();
+    }
+
+    let mut hashes = Vec::new();
+
+    // Extract all k-mers and hash them (no canonicalization)
+    for i in 0..=sequence.len() - k {
+        let kmer = &sequence[i..i + k];
+
+        // Skip k-mers containing non-ACGT characters
+        if kmer.iter().any(|&b| !is_dna_base(b)) {
+            continue;
+        }
+
+        // Hash the k-mer directly (no reverse complement comparison)
+        let hash = hash_kmer(kmer);
+        hashes.push(hash);
+    }
+
+    // Sort and take the smallest hashes (MinHash)
+    hashes.sort_unstable();
+    hashes.truncate(sketch_size);
+    hashes
+}
+
+/// Compute Jaccard similarity between two sketches
+fn jaccard_similarity(sketch1: &[u64], sketch2: &[u64]) -> f64 {
+    use std::collections::HashSet;
+    
+    let set1: HashSet<_> = sketch1.iter().collect();
+    let set2: HashSet<_> = sketch2.iter().collect();
+
+    let intersection_size = set1.intersection(&set2).count();
+    let union_size = set1.union(&set2).count();
+
+    if union_size == 0 {
+        0.0
+    } else {
+        intersection_size as f64 / union_size as f64
+    }
+}
+
+/// Hash a k-mer using a simple hash function
+fn hash_kmer(kmer: &[u8]) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    
+    let mut hasher = DefaultHasher::new();
+    kmer.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Check if byte represents a DNA base
+fn is_dna_base(b: u8) -> bool {
+    matches!(b.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T')
+}
+
+/// Determine best orientation for alignment using fast edit distance (edlib fallback)
+#[allow(dead_code)]
+fn determine_orientation_edlib(query: &[u8], target: &[u8]) -> (Vec<u8>, bool) {
     let config = EdlibAlignConfigRs {
         k: -1,                                       // No limit on edit distance
         mode: EdlibAlignModeRs::EDLIB_MODE_NW,       // Global alignment
