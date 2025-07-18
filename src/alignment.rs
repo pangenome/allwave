@@ -20,9 +20,14 @@ pub fn align_pair(
     target_idx: usize,
     params: &AlignmentParams,
     _orientation_params: &AlignmentParams,
+    use_mash_orientation: bool,
 ) -> AlignmentResult {
-    // Determine best orientation using edlib
-    let (query_seq, is_reverse) = determine_orientation(&query.seq, &target.seq);
+    // Determine best orientation using selected method
+    let (query_seq, is_reverse) = if use_mash_orientation {
+        determine_orientation_mash(&query.seq, &target.seq)
+    } else {
+        determine_orientation_edlib(&query.seq, &target.seq)
+    };
 
     // Perform the actual alignment with WFA2
     match perform_wfa_alignment(&query_seq, &target.seq, params) {
@@ -52,16 +57,20 @@ pub fn align_pair(
 }
 
 /// Determine best orientation for alignment using strand-specific mash distance
-fn determine_orientation(query: &[u8], target: &[u8]) -> (Vec<u8>, bool) {
+fn determine_orientation_mash(query: &[u8], target: &[u8]) -> (Vec<u8>, bool) {
     const ORIENTATION_KMER_SIZE: usize = 15;
-    const ORIENTATION_SKETCH_SIZE: usize = 1000;
+    
+    // Use fixed sketch size for consistent performance
+    // 1000 is a good balance between accuracy and speed
+    // For very low ANI (< 70%), consider increasing to 2000
+    let sketch_size = 1000;
     
     // Create strand-specific sketches (without canonicalization)
-    let target_sketch = sketch_sequence_stranded(target, ORIENTATION_KMER_SIZE, ORIENTATION_SKETCH_SIZE);
-    let fwd_sketch = sketch_sequence_stranded(query, ORIENTATION_KMER_SIZE, ORIENTATION_SKETCH_SIZE);
+    let target_sketch = sketch_sequence_stranded(target, ORIENTATION_KMER_SIZE, sketch_size);
+    let fwd_sketch = sketch_sequence_stranded(query, ORIENTATION_KMER_SIZE, sketch_size);
     
     let rev_seq = reverse_complement(query);
-    let rev_sketch = sketch_sequence_stranded(&rev_seq, ORIENTATION_KMER_SIZE, ORIENTATION_SKETCH_SIZE);
+    let rev_sketch = sketch_sequence_stranded(&rev_seq, ORIENTATION_KMER_SIZE, sketch_size);
     
     // Compute Jaccard similarities
     let fwd_jaccard = jaccard_similarity(&fwd_sketch, &target_sketch);
@@ -135,8 +144,7 @@ fn is_dna_base(b: u8) -> bool {
     matches!(b.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T')
 }
 
-/// Determine best orientation for alignment using fast edit distance (edlib fallback)
-#[allow(dead_code)]
+/// Determine best orientation for alignment using fast edit distance (edlib)
 fn determine_orientation_edlib(query: &[u8], target: &[u8]) -> (Vec<u8>, bool) {
     let config = EdlibAlignConfigRs {
         k: -1,                                       // No limit on edit distance

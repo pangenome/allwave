@@ -14,6 +14,7 @@ pub struct AllPairIterator<'a> {
     params: AlignmentParams,
     orientation_params: AlignmentParams,
     exclude_self: bool,
+    use_mash_orientation: bool,
     _sparsification: SparsificationStrategy,
     pair_iter: Box<dyn Iterator<Item = (usize, usize)> + Send + 'a>,
 }
@@ -21,7 +22,7 @@ pub struct AllPairIterator<'a> {
 impl<'a> AllPairIterator<'a> {
     /// Create iterator for all-vs-all alignments with no sparsification
     pub fn new(sequences: &'a [Sequence], params: AlignmentParams) -> Self {
-        Self::with_options(sequences, params, true, SparsificationStrategy::None)
+        Self::with_options(sequences, params, true, false, SparsificationStrategy::None)
     }
 
     /// Create iterator with custom options
@@ -29,6 +30,7 @@ impl<'a> AllPairIterator<'a> {
         sequences: &'a [Sequence],
         params: AlignmentParams,
         exclude_self: bool,
+        use_mash_orientation: bool,
         sparsification: SparsificationStrategy,
     ) -> Self {
         let n = sequences.len();
@@ -78,6 +80,7 @@ impl<'a> AllPairIterator<'a> {
             params,
             orientation_params: AlignmentParams::edit_distance(),
             exclude_self,
+            use_mash_orientation,
             _sparsification: sparsification,
             pair_iter: Box::new(pairs.into_iter()),
         }
@@ -92,7 +95,7 @@ impl<'a> AllPairIterator<'a> {
     /// Set sparsification strategy
     pub fn with_sparsification(self, strategy: SparsificationStrategy) -> Self {
         // Need to regenerate pairs with new sparsification
-        Self::with_options(self.sequences, self.params, self.exclude_self, strategy)
+        Self::with_options(self.sequences, self.params, self.exclude_self, self.use_mash_orientation, strategy)
     }
 
     /// Convert to parallel iterator
@@ -104,6 +107,7 @@ impl<'a> AllPairIterator<'a> {
             sequences: self.sequences,
             params: self.params,
             orientation_params: self.orientation_params,
+            use_mash_orientation: self.use_mash_orientation,
             pairs,
         }
     }
@@ -169,6 +173,7 @@ impl<'a> Iterator for AllPairIterator<'a> {
             j,
             &self.params,
             &self.orientation_params,
+            self.use_mash_orientation,
         );
 
         Some(result)
@@ -180,6 +185,7 @@ pub struct AllPairParallelIterator<'a> {
     sequences: &'a [Sequence],
     params: AlignmentParams,
     orientation_params: AlignmentParams,
+    use_mash_orientation: bool,
     pairs: Vec<(usize, usize)>,
 }
 
@@ -200,6 +206,7 @@ impl<'a> ParallelIterator for AllPairParallelIterator<'a> {
                     j,
                     &self.params,
                     &self.orientation_params,
+                    self.use_mash_orientation,
                 )
             })
             .drive_unindexed(consumer)
@@ -232,6 +239,7 @@ impl<'a> AllPairParallelIterator<'a> {
                     j,
                     &self.params,
                     &self.orientation_params,
+                    self.use_mash_orientation,
                 );
 
                 match callback(alignment) {

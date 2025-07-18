@@ -57,6 +57,10 @@ struct Args {
     /// Output mash distance matrix and exit (for debugging/comparison with mash)
     #[arg(long)]
     mash_matrix: bool,
+
+    /// Use edlib edit distance for orientation detection instead of mash
+    #[arg(long)]
+    edlib_orientation: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -210,7 +214,7 @@ fn main() -> io::Result<()> {
         parse_scores(&args.scores).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
     // Create the alignment iterator with sparsification
-    let aligner = AllPairIterator::with_options(&sequences, params, true, sparsification);
+    let aligner = AllPairIterator::with_options(&sequences, params, true, !args.edlib_orientation, sparsification);
 
     // Get actual number of pairs to process
     let total_pairs = aligner.pair_count();

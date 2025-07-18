@@ -63,7 +63,7 @@ pub fn process_alignments_with_callback<F>(
 where
     F: Fn(AlignmentResult) -> Result<(), Box<dyn std::error::Error + Send + Sync>> + Send + Sync,
 {
-    let aligner = AllPairIterator::with_options(sequences, params, true, sparsification);
+    let aligner = AllPairIterator::with_options(sequences, params, true, true, sparsification);
     aligner.for_each_with_callback(callback)
 }
 
