@@ -8,7 +8,7 @@ on:
 jobs:
   create-release:
     name: Create Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
@@ -30,11 +30,11 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             artifact_name: allwave
             asset_name: allwave-linux-amd64
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             target: aarch64-unknown-linux-gnu
             artifact_name: allwave
             asset_name: allwave-linux-arm64
@@ -48,10 +48,16 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          # Remove conflicting package if it exists
+          sudo apt-get remove -y libcurl4-gnutls-dev || true
+          sudo apt-get install -y libhts-dev zlib1g-dev libbz2-dev liblzma-dev libcurl4-openssl-dev libssl-dev
+      
       - name: Install cross-compilation tools
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
-          sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
       
       - name: Build
