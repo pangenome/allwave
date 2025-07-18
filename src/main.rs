@@ -1,7 +1,8 @@
 use allwave::{alignment_to_paf, parse_scores, AllPairIterator, Sequence, SparsificationStrategy};
-use bio::io::fasta;
+use bio::io::fasta as bio_fasta;
 use clap::Parser;
-use faigz_rs::{FastaFormat, FastaIndex, FastaReader};
+use noodles::fasta as noodles_fasta;
+use noodles::bgzf;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::File;
 use std::io::{self, Write};
@@ -147,44 +148,22 @@ fn main() -> io::Result<()> {
 
     // Check if file is gzipped by extension and read accordingly
     if args.input.extension().and_then(|s| s.to_str()) == Some("gz") {
-        // Use faigz-rs for gzipped files
-        let index =
-            FastaIndex::new(args.input.to_str().unwrap(), FastaFormat::Fasta).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("Failed to load faigz index: {e}"),
-                )
-            })?;
-
-        let reader = FastaReader::new(&index).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Failed to create faigz reader: {e}"),
-            )
-        })?;
-
-        for i in 0..index.num_sequences() {
-            if let Some(name) = index.sequence_name(i) {
-                match reader.fetch_seq_all(&name) {
-                    Ok(seq_str) => {
-                        sequences.push(Sequence {
-                            id: name.clone(),
-                            seq: seq_str.into_bytes(),
-                        });
-                    }
-                    Err(e) => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            format!("Failed to read sequence {name}: {e}"),
-                        ));
-                    }
-                }
-            }
+        // Use noodles for bgzipped files
+        let file = File::open(&args.input)?;
+        let bgzf_reader = bgzf::Reader::new(file);
+        let mut reader = noodles_fasta::io::Reader::new(bgzf_reader);
+        
+        for result in reader.records() {
+            let record = result?;
+            sequences.push(Sequence {
+                id: String::from_utf8_lossy(record.name()).to_string(),
+                seq: record.sequence().as_ref().to_vec(),
+            });
         }
     } else {
         // Handle plain file using bio crate
         let file = File::open(&args.input)?;
-        let fasta_reader = fasta::Reader::new(file);
+        let fasta_reader = bio_fasta::Reader::new(file);
 
         for result in fasta_reader.records() {
             let record = result?;
