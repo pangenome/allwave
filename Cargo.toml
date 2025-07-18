@@ -19,7 +19,7 @@ name = "allwave"
 path = "src/main.rs"
 
 [dependencies]
-bio = "1.4"
+bio = "2.3"
 clap = { version = "4.4", features = ["derive"] }
 edlib_rs = "0.1"
 indicatif = { version = "0.17", features = ["rayon"] }
