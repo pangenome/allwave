@@ -39,8 +39,15 @@ struct Args {
     output: Option<PathBuf>,
 
     /// Alignment scores: match,mismatch,gap_open,gap_ext[,gap_open2,gap_ext2]
+    /// (default empirically proven for 85-95% ANI)
     #[arg(short, long, default_value = "0,5,8,2,24,1")]
     scores: String,
+
+    /// Preset alignment parameters for different ANI levels
+    /// Format: -x <ANI%> or -x <decimal> (e.g., -x 95% or -x 0.95)
+    /// Presets: 98% (stringent), 90% (default), 80% (permissive), 70% (low penalties), 60% (edit distance)
+    #[arg(short = 'x', long, conflicts_with = "scores")]
+    preset: Option<String>,
 
     /// Number of threads to use for parallel processing
     #[arg(short, long, default_value = "1")]
@@ -62,6 +69,50 @@ struct Args {
     /// Use edlib edit distance for orientation detection instead of mash
     #[arg(long)]
     edlib_orientation: bool,
+}
+
+/// Parse ANI preset and return corresponding alignment scores
+fn parse_ani_preset(preset: &str) -> Result<String, String> {
+    // Parse as percentage (95% or 95) or decimal (0.95)
+    let ani_percent = if preset.contains('.') {
+        // Decimal format (0.95)
+        match preset.parse::<f64>() {
+            Ok(value) if value > 0.0 && value <= 1.0 => value * 100.0,
+            _ => {
+                return Err(format!(
+                    "Invalid ANI value: {preset}. Use 0.5-1.0 or 50%-100%"
+                ))
+            }
+        }
+    } else if let Some(number_part) = preset.strip_suffix('%') {
+        // Percentage format with % symbol (95%)
+        match number_part.parse::<f64>() {
+            Ok(value) if (50.0..=100.0).contains(&value) => value,
+            _ => return Err(format!("Invalid ANI percentage: {preset}. Use 50%-100%")),
+        }
+    } else {
+        // Percentage format without % symbol (95)
+        match preset.parse::<f64>() {
+            Ok(value) if (50.0..=100.0).contains(&value) => value,
+            _ => {
+                return Err(format!(
+                    "Invalid ANI percentage: {preset}. Use 50%-100% or 50-100"
+                ))
+            }
+        }
+    };
+
+    // Map ANI ranges to practical parameters based on empirically successful default
+    // Current default (0,5,8,2,24,1) works well down to ~85% ANI
+    let scores = match ani_percent {
+        p if p >= 95.0 => "0,7,12,2,36,1", // 95-100% ANI: More stringent for high identity
+        p if p >= 85.0 => "0,5,8,2,24,1",  // 85-95% ANI: Current proven default
+        p if p >= 75.0 => "0,4,6,2,18,1",  // 75-85% ANI: More permissive
+        p if p >= 65.0 => "0,3,4,1",       // 65-75% ANI: Simple affine gap model
+        _ => "0,1,1,1",                    // <65% ANI: Edit distance only
+    };
+
+    Ok(scores.to_string())
 }
 
 fn main() -> io::Result<()> {
@@ -189,9 +240,18 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
-    // Parse alignment parameters
+    // Parse alignment parameters (use preset if provided, otherwise use scores)
+    let scores_str = if let Some(preset) = &args.preset {
+        let preset_scores =
+            parse_ani_preset(preset).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+        eprintln!("Using ANI preset {preset} -> alignment scores: {preset_scores}");
+        preset_scores
+    } else {
+        args.scores.clone()
+    };
+
     let params =
-        parse_scores(&args.scores).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+        parse_scores(&scores_str).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
     // Create the alignment iterator with sparsification
     let aligner = AllPairIterator::with_options(
