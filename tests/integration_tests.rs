@@ -2,9 +2,9 @@ use allwave::test_framework::*;
 use allwave::validation::*;
 use allwave::validation_correct::*;
 use allwave::validation_simple::*;
+use rand::Rng;
 use std::collections::HashMap;
 use std::process::Command;
-use rand::Rng;
 
 #[test]
 fn test_basic_mutations() {
@@ -865,37 +865,60 @@ fn parse_identity(fields: &[&str]) -> f64 {
 #[test]
 fn test_orientation_detection_comparison() {
     println!("\n=== Test: Mash vs Edlib orientation detection comparison ===");
-    
+
     // Create test sequences with known orientations
     let test_cases = create_orientation_test_cases();
-    
+
     for test_case in test_cases {
         println!("  Testing: {}", test_case.name);
-        
+
         // Test mash-based orientation detection
         let mash_result = test_orientation_detection_mash(&test_case);
-        
+
         // Test edlib-based orientation detection
         let edlib_result = test_orientation_detection_edlib(&test_case);
-        
-        println!("    Mash result: forward={:.4}, reverse={:.4}, chose={}", 
-                 mash_result.forward_distance, mash_result.reverse_distance, 
-                 if mash_result.is_reverse { "reverse" } else { "forward" });
-        println!("    Edlib result: forward={}, reverse={}, chose={}", 
-                 edlib_result.forward_distance, edlib_result.reverse_distance,
-                 if edlib_result.is_reverse { "reverse" } else { "forward" });
-        
+
+        println!(
+            "    Mash result: forward={:.4}, reverse={:.4}, chose={}",
+            mash_result.forward_distance,
+            mash_result.reverse_distance,
+            if mash_result.is_reverse {
+                "reverse"
+            } else {
+                "forward"
+            }
+        );
+        println!(
+            "    Edlib result: forward={}, reverse={}, chose={}",
+            edlib_result.forward_distance,
+            edlib_result.reverse_distance,
+            if edlib_result.is_reverse {
+                "reverse"
+            } else {
+                "forward"
+            }
+        );
+
         // Both methods should agree on orientation
-        assert_eq!(mash_result.is_reverse, edlib_result.is_reverse,
-                   "Orientation detection methods disagree for test case: {}", test_case.name);
-        
+        assert_eq!(
+            mash_result.is_reverse, edlib_result.is_reverse,
+            "Orientation detection methods disagree for test case: {}",
+            test_case.name
+        );
+
         // Expected orientation should match the test case
-        assert_eq!(mash_result.is_reverse, test_case.expected_reverse,
-                   "Mash orientation detection incorrect for test case: {}", test_case.name);
-        assert_eq!(edlib_result.is_reverse, test_case.expected_reverse,
-                   "Edlib orientation detection incorrect for test case: {}", test_case.name);
+        assert_eq!(
+            mash_result.is_reverse, test_case.expected_reverse,
+            "Mash orientation detection incorrect for test case: {}",
+            test_case.name
+        );
+        assert_eq!(
+            edlib_result.is_reverse, test_case.expected_reverse,
+            "Edlib orientation detection incorrect for test case: {}",
+            test_case.name
+        );
     }
-    
+
     println!("  All orientation detection tests passed!");
 }
 
@@ -917,10 +940,10 @@ struct OrientationResult {
 fn create_orientation_test_cases() -> Vec<OrientationTestCase> {
     use rand::rngs::StdRng;
     use rand::SeedableRng;
-    
+
     let mut test_cases = Vec::new();
     let mut rng = StdRng::seed_from_u64(12345);
-    
+
     // Test case 1: Identical sequences (should be forward)
     let ref_seq = generate_test_sequence(1000, &mut rng);
     test_cases.push(OrientationTestCase {
@@ -929,7 +952,7 @@ fn create_orientation_test_cases() -> Vec<OrientationTestCase> {
         query: ref_seq.clone(),
         expected_reverse: false,
     });
-    
+
     // Test case 2: Forward with mutations
     let ref_seq = generate_test_sequence(1000, &mut rng);
     let mut query_fwd = ref_seq.clone();
@@ -940,7 +963,7 @@ fn create_orientation_test_cases() -> Vec<OrientationTestCase> {
         query: query_fwd,
         expected_reverse: false,
     });
-    
+
     // Test case 3: Reverse complement with mutations
     let ref_seq = generate_test_sequence(1000, &mut rng);
     let mut query_rev = reverse_complement(&ref_seq);
@@ -951,7 +974,7 @@ fn create_orientation_test_cases() -> Vec<OrientationTestCase> {
         query: query_rev,
         expected_reverse: true,
     });
-    
+
     // Test case 4: High mutation rate forward
     let ref_seq = generate_test_sequence(1000, &mut rng);
     let mut query_fwd = ref_seq.clone();
@@ -962,7 +985,7 @@ fn create_orientation_test_cases() -> Vec<OrientationTestCase> {
         query: query_fwd,
         expected_reverse: false,
     });
-    
+
     // Test case 5: High mutation rate reverse
     let ref_seq = generate_test_sequence(1000, &mut rng);
     let mut query_rev = reverse_complement(&ref_seq);
@@ -973,7 +996,7 @@ fn create_orientation_test_cases() -> Vec<OrientationTestCase> {
         query: query_rev,
         expected_reverse: true,
     });
-    
+
     // Test case 6: Short sequences
     let ref_seq = generate_test_sequence(100, &mut rng);
     let query_rev = reverse_complement(&ref_seq);
@@ -983,7 +1006,7 @@ fn create_orientation_test_cases() -> Vec<OrientationTestCase> {
         query: query_rev,
         expected_reverse: true,
     });
-    
+
     // Test case 7: Long sequences
     let ref_seq = generate_test_sequence(10000, &mut rng);
     let mut query_fwd = ref_seq.clone();
@@ -994,7 +1017,7 @@ fn create_orientation_test_cases() -> Vec<OrientationTestCase> {
         query: query_fwd,
         expected_reverse: false,
     });
-    
+
     // Test case 8: Ambiguous case (very high mutation rate)
     let ref_seq = generate_test_sequence(500, &mut rng);
     let mut query_fwd = ref_seq.clone();
@@ -1005,7 +1028,7 @@ fn create_orientation_test_cases() -> Vec<OrientationTestCase> {
         query: query_fwd,
         expected_reverse: false,
     });
-    
+
     test_cases
 }
 
@@ -1029,18 +1052,27 @@ fn apply_test_mutations(seq: &mut [u8], mutation_rate: f64, rng: &mut impl Rng) 
 fn test_orientation_detection_mash(test_case: &OrientationTestCase) -> OrientationResult {
     const ORIENTATION_KMER_SIZE: usize = 15;
     const ORIENTATION_SKETCH_SIZE: usize = 1000;
-    
+
     // Create strand-specific sketches (without canonicalization)
-    let target_sketch = sketch_sequence_stranded_test(&test_case.reference, ORIENTATION_KMER_SIZE, ORIENTATION_SKETCH_SIZE);
-    let fwd_sketch = sketch_sequence_stranded_test(&test_case.query, ORIENTATION_KMER_SIZE, ORIENTATION_SKETCH_SIZE);
-    
+    let target_sketch = sketch_sequence_stranded_test(
+        &test_case.reference,
+        ORIENTATION_KMER_SIZE,
+        ORIENTATION_SKETCH_SIZE,
+    );
+    let fwd_sketch = sketch_sequence_stranded_test(
+        &test_case.query,
+        ORIENTATION_KMER_SIZE,
+        ORIENTATION_SKETCH_SIZE,
+    );
+
     let rev_seq = reverse_complement(&test_case.query);
-    let rev_sketch = sketch_sequence_stranded_test(&rev_seq, ORIENTATION_KMER_SIZE, ORIENTATION_SKETCH_SIZE);
-    
+    let rev_sketch =
+        sketch_sequence_stranded_test(&rev_seq, ORIENTATION_KMER_SIZE, ORIENTATION_SKETCH_SIZE);
+
     // Compute Jaccard similarities
     let fwd_jaccard = jaccard_similarity_test(&fwd_sketch, &target_sketch);
     let rev_jaccard = jaccard_similarity_test(&rev_sketch, &target_sketch);
-    
+
     OrientationResult {
         forward_distance: 1.0 - fwd_jaccard,
         reverse_distance: 1.0 - rev_jaccard,
@@ -1079,7 +1111,7 @@ fn sketch_sequence_stranded_test(sequence: &[u8], k: usize, sketch_size: usize) 
 /// Compute Jaccard similarity between two sketches for testing
 fn jaccard_similarity_test(sketch1: &[u64], sketch2: &[u64]) -> f64 {
     use std::collections::HashSet;
-    
+
     let set1: HashSet<_> = sketch1.iter().collect();
     let set2: HashSet<_> = sketch2.iter().collect();
 
@@ -1097,7 +1129,7 @@ fn jaccard_similarity_test(sketch1: &[u64], sketch2: &[u64]) -> f64 {
 fn hash_kmer_test(kmer: &[u8]) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    
+
     let mut hasher = DefaultHasher::new();
     kmer.hash(&mut hasher);
     hasher.finish()
@@ -1110,23 +1142,23 @@ fn is_dna_base_test(b: u8) -> bool {
 
 fn test_orientation_detection_edlib(test_case: &OrientationTestCase) -> OrientationResult {
     use edlib_rs::edlibrs::*;
-    
+
     let config = EdlibAlignConfigRs {
         k: -1,
         mode: EdlibAlignModeRs::EDLIB_MODE_NW,
         task: EdlibAlignTaskRs::EDLIB_TASK_DISTANCE,
         additionalequalities: &[],
     };
-    
+
     // Get edit distance for forward orientation
     let fwd_result = edlibAlignRs(&test_case.query, &test_case.reference, &config);
     let fwd_distance = fwd_result.editDistance;
-    
+
     // Get edit distance for reverse complement orientation
     let rev_seq = reverse_complement(&test_case.query);
     let rev_result = edlibAlignRs(&rev_seq, &test_case.reference, &config);
     let rev_distance = rev_result.editDistance;
-    
+
     OrientationResult {
         forward_distance: fwd_distance as f64,
         reverse_distance: rev_distance as f64,
@@ -1137,47 +1169,63 @@ fn test_orientation_detection_edlib(test_case: &OrientationTestCase) -> Orientat
 #[test]
 fn test_orientation_detection_performance() {
     println!("\n=== Test: Orientation detection performance benchmark ===");
-    
-    use std::time::Instant;
+
     use rand::rngs::StdRng;
     use rand::SeedableRng;
-    
+    use std::time::Instant;
+
     let mut rng = StdRng::seed_from_u64(99999);
-    
+
     // Test different sequence lengths
     let test_lengths = vec![100, 500, 1000, 5000, 10000];
-    
+
     for length in test_lengths {
         println!("  Testing length: {}", length);
-        
+
         let reference = generate_test_sequence(length, &mut rng);
         let mut query = reference.clone();
         apply_test_mutations(&mut query, 0.01, &mut rng);
-        
+
         let test_case = OrientationTestCase {
             name: format!("perf_test_{}", length),
             reference,
             query,
             expected_reverse: false,
         };
-        
+
         // Time mash-based detection
         let start = Instant::now();
         let mash_result = test_orientation_detection_mash(&test_case);
         let mash_time = start.elapsed();
-        
+
         // Time edlib-based detection
         let start = Instant::now();
         let edlib_result = test_orientation_detection_edlib(&test_case);
         let edlib_time = start.elapsed();
-        
-        println!("    Mash time: {:?}, Edlib time: {:?}", mash_time, edlib_time);
-        println!("    Mash result: {}, Edlib result: {}", 
-                 if mash_result.is_reverse { "reverse" } else { "forward" },
-                 if edlib_result.is_reverse { "reverse" } else { "forward" });
-        
+
+        println!(
+            "    Mash time: {:?}, Edlib time: {:?}",
+            mash_time, edlib_time
+        );
+        println!(
+            "    Mash result: {}, Edlib result: {}",
+            if mash_result.is_reverse {
+                "reverse"
+            } else {
+                "forward"
+            },
+            if edlib_result.is_reverse {
+                "reverse"
+            } else {
+                "forward"
+            }
+        );
+
         // Both should agree on orientation
-        assert_eq!(mash_result.is_reverse, edlib_result.is_reverse,
-                   "Methods disagree for length {}", length);
+        assert_eq!(
+            mash_result.is_reverse, edlib_result.is_reverse,
+            "Methods disagree for length {}",
+            length
+        );
     }
 }

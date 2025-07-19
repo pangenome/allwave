@@ -59,23 +59,23 @@ pub fn align_pair(
 /// Determine best orientation for alignment using strand-specific mash distance
 fn determine_orientation_mash(query: &[u8], target: &[u8]) -> (Vec<u8>, bool) {
     const ORIENTATION_KMER_SIZE: usize = 15;
-    
+
     // Use fixed sketch size for consistent performance
     // 1000 is a good balance between accuracy and speed
     // For very low ANI (< 70%), consider increasing to 2000
     let sketch_size = 1000;
-    
+
     // Create strand-specific sketches (without canonicalization)
     let target_sketch = sketch_sequence_stranded(target, ORIENTATION_KMER_SIZE, sketch_size);
     let fwd_sketch = sketch_sequence_stranded(query, ORIENTATION_KMER_SIZE, sketch_size);
-    
+
     let rev_seq = reverse_complement(query);
     let rev_sketch = sketch_sequence_stranded(&rev_seq, ORIENTATION_KMER_SIZE, sketch_size);
-    
+
     // Compute Jaccard similarities
     let fwd_jaccard = jaccard_similarity(&fwd_sketch, &target_sketch);
     let rev_jaccard = jaccard_similarity(&rev_sketch, &target_sketch);
-    
+
     // Choose the better orientation (higher Jaccard = more similar)
     if fwd_jaccard >= rev_jaccard {
         (query.to_vec(), false)
@@ -115,7 +115,7 @@ fn sketch_sequence_stranded(sequence: &[u8], k: usize, sketch_size: usize) -> Ve
 /// Compute Jaccard similarity between two sketches
 fn jaccard_similarity(sketch1: &[u64], sketch2: &[u64]) -> f64 {
     use std::collections::HashSet;
-    
+
     let set1: HashSet<_> = sketch1.iter().collect();
     let set2: HashSet<_> = sketch2.iter().collect();
 
@@ -133,7 +133,7 @@ fn jaccard_similarity(sketch1: &[u64], sketch2: &[u64]) -> f64 {
 fn hash_kmer(kmer: &[u8]) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    
+
     let mut hasher = DefaultHasher::new();
     kmer.hash(&mut hasher);
     hasher.finish()

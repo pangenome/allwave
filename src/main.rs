@@ -1,9 +1,9 @@
 use allwave::{alignment_to_paf, parse_scores, AllPairIterator, Sequence, SparsificationStrategy};
 use bio::io::fasta as bio_fasta;
 use clap::Parser;
-use noodles::fasta as noodles_fasta;
-use noodles::bgzf;
 use indicatif::{ProgressBar, ProgressStyle};
+use noodles::bgzf;
+use noodles::fasta as noodles_fasta;
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -152,7 +152,7 @@ fn main() -> io::Result<()> {
         let file = File::open(&args.input)?;
         let bgzf_reader = bgzf::Reader::new(file);
         let mut reader = noodles_fasta::io::Reader::new(bgzf_reader);
-        
+
         for result in reader.records() {
             let record = result?;
             sequences.push(Sequence {
@@ -183,7 +183,8 @@ fn main() -> io::Result<()> {
         };
 
         // Compute and print mash distance matrix
-        let matrix = allwave::mash::compute_distance_matrix_with_params(&sequences, kmer_size, 1000);
+        let matrix =
+            allwave::mash::compute_distance_matrix_with_params(&sequences, kmer_size, 1000);
         allwave::mash::print_distance_matrix(&sequences, &matrix);
         return Ok(());
     }
@@ -193,7 +194,13 @@ fn main() -> io::Result<()> {
         parse_scores(&args.scores).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
     // Create the alignment iterator with sparsification
-    let aligner = AllPairIterator::with_options(&sequences, params, true, !args.edlib_orientation, sparsification);
+    let aligner = AllPairIterator::with_options(
+        &sequences,
+        params,
+        true,
+        !args.edlib_orientation,
+        sparsification,
+    );
 
     // Get actual number of pairs to process
     let total_pairs = aligner.pair_count();

@@ -95,7 +95,13 @@ impl<'a> AllPairIterator<'a> {
     /// Set sparsification strategy
     pub fn with_sparsification(self, strategy: SparsificationStrategy) -> Self {
         // Need to regenerate pairs with new sparsification
-        Self::with_options(self.sequences, self.params, self.exclude_self, self.use_mash_orientation, strategy)
+        Self::with_options(
+            self.sequences,
+            self.params,
+            self.exclude_self,
+            self.use_mash_orientation,
+            strategy,
+        )
     }
 
     /// Convert to parallel iterator
