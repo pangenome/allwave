@@ -27,7 +27,7 @@ indicatif = { version = "0.17", features = ["rayon"] }
 noodles = { version = "0.94", features = ["fasta", "bgzf"] }
 lib_wfa2 = { git = "https://github.com/ekg/lib_wfa2", rev = "819b82cd842aabedcb962fd5b82380fe454234f6" }
 rand = "0.8"
-rayon = "1.8"
+rayon = "1.11"
 tempfile = "3.0"
 atty = "0.2"
 
