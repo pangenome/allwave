@@ -24,7 +24,7 @@ clap = { version = "4.4", features = ["derive"] }
 edlib_rs = "0.1"
 indicatif = { version = "0.17", features = ["rayon"] }
 # faigz-rs = { git = "https://github.com/waveygang/faigz-rs.git", rev = "06799b07bfca219f4eef844b43f7d8c3ef5f3d6f" }
-noodles = { version = "0.94", features = ["fasta", "bgzf"] }
+noodles = { version = "0.101", features = ["fasta", "bgzf"] }
 lib_wfa2 = { git = "https://github.com/ekg/lib_wfa2", rev = "819b82cd842aabedcb962fd5b82380fe454234f6" }
 rand = "0.8"
 rayon = "1.8"
