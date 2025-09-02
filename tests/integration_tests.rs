@@ -1229,3 +1229,570 @@ fn test_orientation_detection_performance() {
         );
     }
 }
+
+#[test]
+fn test_keep_prefixes_filtering() {
+    println!("\n=== Test: Keep prefixes filtering ===");
+
+    // Create test sequences with specific prefixes
+    let sequences = vec![
+        ("human_seq1", b"ATCGATCGATCGATCG"),
+        ("human_seq2", b"GCTAGCTAGCTAGCTA"),
+        ("mouse_seq1", b"TTAGCTAGCTAGCTAG"),
+        ("mouse_seq2", b"CCATAGCTAGCTAGCT"),
+        ("plant_seq1", b"GGAAGATCGATCGATC"),
+        ("bacteria_seq", b"TTTTGATCGATCGATC"),
+    ];
+
+    // Write test FASTA
+    let fasta_path = "/tmp/allwave_test_keep_prefixes.fa";
+    use std::io::Write;
+    let mut file = std::fs::File::create(fasta_path).unwrap();
+
+    for (id, seq) in &sequences {
+        writeln!(file, ">{}", id).unwrap();
+        writeln!(file, "{}", String::from_utf8_lossy(*seq)).unwrap();
+    }
+    drop(file);
+
+    // Test 1: Single prefix keep (long form)
+    println!("  Testing single prefix keep: 'human'");
+    let output = Command::new("./target/debug/allwave")
+        .arg("--input")
+        .arg(fasta_path)
+        .arg("--keep-prefixes")
+        .arg("human")
+        .arg("-p")
+        .arg("none")
+        .output()
+        .expect("Failed to run allwave");
+
+    assert!(
+        output.status.success(),
+        "allwave failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let paf_output = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = paf_output.lines().collect();
+
+    // Should have 2 alignments: human_seq1 vs human_seq2 and human_seq2 vs human_seq1
+    assert_eq!(lines.len(), 2, "Expected 2 alignments, got {}", lines.len());
+
+    // Verify only human sequences are present
+    for line in &lines {
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() >= 6 {
+            assert!(
+                fields[0].starts_with("human"),
+                "Query {} doesn't start with 'human'",
+                fields[0]
+            );
+            assert!(
+                fields[5].starts_with("human"),
+                "Target {} doesn't start with 'human'",
+                fields[5]
+            );
+        }
+    }
+
+    // Test 2: Multiple prefix keep (short form)
+    println!("  Testing multiple prefix keep: 'human,mouse' (short form -k)");
+    let output = Command::new("./target/debug/allwave")
+        .arg("--input")
+        .arg(fasta_path)
+        .arg("-k")
+        .arg("human,mouse")
+        .arg("-p")
+        .arg("none")
+        .output()
+        .expect("Failed to run allwave");
+
+    assert!(
+        output.status.success(),
+        "allwave failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let paf_output = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = paf_output.lines().collect();
+
+    // Should have 12 alignments: 4 sequences, each aligned to 3 others = 4*3 = 12
+    assert_eq!(
+        lines.len(),
+        12,
+        "Expected 12 alignments, got {}",
+        lines.len()
+    );
+
+    // Verify only human and mouse sequences are present
+    for line in &lines {
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() >= 6 {
+            assert!(
+                fields[0].starts_with("human") || fields[0].starts_with("mouse"),
+                "Query {} doesn't start with 'human' or 'mouse'",
+                fields[0]
+            );
+            assert!(
+                fields[5].starts_with("human") || fields[5].starts_with("mouse"),
+                "Target {} doesn't start with 'human' or 'mouse'",
+                fields[5]
+            );
+        }
+    }
+
+    // Test 3: Non-matching prefix (should fail)
+    println!("  Testing non-matching keep prefix: 'virus'");
+    let output = Command::new("./target/debug/allwave")
+        .arg("--input")
+        .arg(fasta_path)
+        .arg("-k")
+        .arg("virus")
+        .arg("-p")
+        .arg("none")
+        .output()
+        .expect("Failed to run allwave");
+
+    assert!(
+        !output.status.success(),
+        "allwave should have failed with non-matching prefix"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("No sequences match the specified keep prefixes"),
+        "Expected error message about no matching sequences, got: {}",
+        stderr
+    );
+
+    // Test 4: Prefix with whitespace
+    println!("  Testing keep prefix with whitespace: ' human , mouse '");
+    let output = Command::new("./target/debug/allwave")
+        .arg("--input")
+        .arg(fasta_path)
+        .arg("--keep-prefixes")
+        .arg(" human , mouse ")
+        .arg("-p")
+        .arg("none")
+        .output()
+        .expect("Failed to run allwave");
+
+    assert!(
+        output.status.success(),
+        "allwave failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let paf_output = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = paf_output.lines().collect();
+
+    // Should have same result as Test 2 (whitespace should be trimmed)
+    assert_eq!(
+        lines.len(),
+        12,
+        "Expected 12 alignments, got {}",
+        lines.len()
+    );
+
+    // Clean up
+    std::fs::remove_file(fasta_path).unwrap();
+
+    println!("  All keep prefixes filtering tests passed!");
+}
+
+#[test]
+fn test_exclude_prefixes_filtering() {
+    println!("\n=== Test: Exclude prefixes filtering ===");
+
+    // Create test sequences with specific prefixes
+    let sequences = vec![
+        ("human_seq1", b"ATCGATCGATCGATCG"),
+        ("human_seq2", b"GCTAGCTAGCTAGCTA"),
+        ("mouse_seq1", b"TTAGCTAGCTAGCTAG"),
+        ("mouse_seq2", b"CCATAGCTAGCTAGCT"),
+        ("plant_seq1", b"GGAAGATCGATCGATC"),
+        ("bacteria_seq", b"TTTTGATCGATCGATC"),
+    ];
+
+    // Write test FASTA
+    let fasta_path = "/tmp/allwave_test_exclude_prefixes.fa";
+    use std::io::Write;
+    let mut file = std::fs::File::create(fasta_path).unwrap();
+
+    for (id, seq) in &sequences {
+        writeln!(file, ">{}", id).unwrap();
+        writeln!(file, "{}", String::from_utf8_lossy(*seq)).unwrap();
+    }
+    drop(file);
+
+    // Test 1: Exclude single prefix (long form)
+    println!("  Testing exclude single prefix: 'human'");
+    let output = Command::new("./target/debug/allwave")
+        .arg("--input")
+        .arg(fasta_path)
+        .arg("--exclude-prefixes")
+        .arg("human")
+        .arg("-p")
+        .arg("none")
+        .output()
+        .expect("Failed to run allwave");
+
+    assert!(
+        output.status.success(),
+        "allwave failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let paf_output = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = paf_output.lines().collect();
+
+    // Should have 12 alignments: 4 remaining sequences (mouse, plant, bacteria), each aligned to 3 others = 4*3 = 12
+    assert_eq!(
+        lines.len(),
+        12,
+        "Expected 12 alignments, got {}",
+        lines.len()
+    );
+
+    // Verify no human sequences are present
+    for line in &lines {
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() >= 6 {
+            assert!(
+                !fields[0].starts_with("human"),
+                "Query {} should not start with 'human'",
+                fields[0]
+            );
+            assert!(
+                !fields[5].starts_with("human"),
+                "Target {} should not start with 'human'",
+                fields[5]
+            );
+        }
+    }
+
+    // Test 2: Exclude multiple prefixes (short form)
+    println!("  Testing exclude multiple prefixes: 'human,mouse' (short form -e)");
+    let output = Command::new("./target/debug/allwave")
+        .arg("--input")
+        .arg(fasta_path)
+        .arg("-e")
+        .arg("human,mouse")
+        .arg("-p")
+        .arg("none")
+        .output()
+        .expect("Failed to run allwave");
+
+    assert!(
+        output.status.success(),
+        "allwave failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let paf_output = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = paf_output.lines().collect();
+
+    // Should have 2 alignments: 2 remaining sequences (plant, bacteria), each aligned to 1 other = 2*1 = 2
+    assert_eq!(lines.len(), 2, "Expected 2 alignments, got {}", lines.len());
+
+    // Verify no human or mouse sequences are present
+    for line in &lines {
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() >= 6 {
+            assert!(
+                !fields[0].starts_with("human") && !fields[0].starts_with("mouse"),
+                "Query {} should not start with 'human' or 'mouse'",
+                fields[0]
+            );
+            assert!(
+                !fields[5].starts_with("human") && !fields[5].starts_with("mouse"),
+                "Target {} should not start with 'human' or 'mouse'",
+                fields[5]
+            );
+        }
+    }
+
+    // Test 3: Exclude all sequences (should fail)
+    println!("  Testing exclude all sequences (should fail)");
+    let output = Command::new("./target/debug/allwave")
+        .arg("--input")
+        .arg(fasta_path)
+        .arg("-e")
+        .arg("human,mouse,plant,bacteria")
+        .arg("-p")
+        .arg("none")
+        .output()
+        .expect("Failed to run allwave");
+
+    assert!(
+        !output.status.success(),
+        "allwave should have failed when all sequences excluded"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("All sequences were excluded"),
+        "Expected error message about all sequences excluded, got: {}",
+        stderr
+    );
+
+    // Test 4: Exclude with whitespace
+    println!("  Testing exclude with whitespace: ' human , mouse '");
+    let output = Command::new("./target/debug/allwave")
+        .arg("--input")
+        .arg(fasta_path)
+        .arg("--exclude-prefixes")
+        .arg(" human , mouse ")
+        .arg("-p")
+        .arg("none")
+        .output()
+        .expect("Failed to run allwave");
+
+    assert!(
+        output.status.success(),
+        "allwave failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let paf_output = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = paf_output.lines().collect();
+
+    // Should have same result as Test 2 (whitespace should be trimmed)
+    assert_eq!(lines.len(), 2, "Expected 2 alignments, got {}", lines.len());
+
+    // Clean up
+    std::fs::remove_file(fasta_path).unwrap();
+
+    println!("  All exclude prefixes filtering tests passed!");
+}
+
+#[test]
+fn test_prefix_filtering_conflicts() {
+    println!("\n=== Test: Prefix filtering conflicts ===");
+
+    // Create test FASTA
+    let fasta_path = "/tmp/allwave_test_conflicts.fa";
+    use std::io::Write;
+    let mut file = std::fs::File::create(fasta_path).unwrap();
+    writeln!(file, ">test_seq").unwrap();
+    writeln!(file, "ATCGATCGATCGATCG").unwrap();
+    drop(file);
+
+    // Test that keep and exclude conflict
+    println!("  Testing that --keep-prefixes and --exclude-prefixes conflict");
+    let output = Command::new("./target/debug/allwave")
+        .arg("--input")
+        .arg(fasta_path)
+        .arg("--keep-prefixes")
+        .arg("test")
+        .arg("--exclude-prefixes")
+        .arg("other")
+        .output()
+        .expect("Failed to run allwave");
+
+    assert!(
+        !output.status.success(),
+        "allwave should have failed due to conflicting arguments"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot be used with") || stderr.contains("conflict"),
+        "Expected conflict error message, got: {}",
+        stderr
+    );
+
+    // Clean up
+    std::fs::remove_file(fasta_path).unwrap();
+
+    println!("  Prefix filtering conflict test passed!");
+}
+
+#[test]
+fn test_no_prefix_filtering() {
+    println!("\n=== Test: No prefix filtering (baseline) ===");
+
+    // Create test sequences
+    let sequences = vec![
+        ("human_seq1", b"ATCGATCGATCGATCG"),
+        ("human_seq2", b"GCTAGCTAGCTAGCTA"),
+        ("mouse_seq1", b"TTAGCTAGCTAGCTAG"),
+        ("mouse_seq2", b"CCATAGCTAGCTAGCT"),
+        ("plant_seq1", b"GGAAGATCGATCGATC"),
+        ("bacteria_seq", b"TTTTGATCGATCGATC"),
+    ];
+
+    // Write test FASTA
+    let fasta_path = "/tmp/allwave_test_no_filtering.fa";
+    use std::io::Write;
+    let mut file = std::fs::File::create(fasta_path).unwrap();
+
+    for (id, seq) in &sequences {
+        writeln!(file, ">{}", id).unwrap();
+        writeln!(file, "{}", String::from_utf8_lossy(*seq)).unwrap();
+    }
+    drop(file);
+
+    // Test without any filtering (should include all sequences)
+    println!("  Testing without prefix filtering (all sequences)");
+    let output = Command::new("./target/debug/allwave")
+        .arg("--input")
+        .arg(fasta_path)
+        .arg("-p")
+        .arg("none")
+        .output()
+        .expect("Failed to run allwave");
+
+    assert!(
+        output.status.success(),
+        "allwave failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let paf_output = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = paf_output.lines().collect();
+
+    // Should have 30 alignments: 6 sequences, each aligned to 5 others = 6*5 = 30
+    assert_eq!(
+        lines.len(),
+        30,
+        "Expected 30 alignments, got {}",
+        lines.len()
+    );
+
+    // Clean up
+    std::fs::remove_file(fasta_path).unwrap();
+
+    println!("  No prefix filtering test passed!");
+}
+
+#[test]
+fn test_keep_prefixes_with_sparsification() {
+    println!("\n=== Test: Keep prefixes filtering with sparsification ===");
+
+    // Create larger test set
+    let sequences = vec![
+        ("group_A_seq1", b"ATCGATCGATCGATCGATCGATCGATCGATCG"),
+        ("group_A_seq2", b"GCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTA"),
+        ("group_A_seq3", b"TTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAG"),
+        ("group_B_seq1", b"CCATAGCTAGCTAGCTAGCTAGCTAGCTAGCT"),
+        ("group_B_seq2", b"GGAAGATCGATCGATCGATCGATCGATCGATC"),
+        ("group_B_seq3", b"TTTTGATCGATCGATCGATCGATCGATCGATC"),
+        ("other_seq1", b"AAAAAAGATCGATCGATCGATCGATCGATCGA"),
+        ("other_seq2", b"CCCCCCGATCGATCGATCGATCGATCGATCGA"),
+    ];
+
+    let fasta_path = "/tmp/allwave_test_keep_sparsification.fa";
+    use std::io::Write;
+    let mut file = std::fs::File::create(fasta_path).unwrap();
+
+    for (id, seq) in &sequences {
+        writeln!(file, ">{}", id).unwrap();
+        writeln!(file, "{}", String::from_utf8_lossy(*seq)).unwrap();
+    }
+    drop(file);
+
+    // Test keep filtering + sparsification
+    println!("  Testing keep prefix 'group_A' with giant:0.99 sparsification");
+    let output = Command::new("./target/debug/allwave")
+        .arg("--input")
+        .arg(fasta_path)
+        .arg("-k")
+        .arg("group_A")
+        .arg("-p")
+        .arg("giant:0.99")
+        .output()
+        .expect("Failed to run allwave");
+
+    assert!(
+        output.status.success(),
+        "allwave failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    // Should show filtering message
+    assert!(
+        stderr.contains("Kept sequences with prefixes: 8 -> 3"),
+        "Expected keep filtering message, got: {}",
+        stderr
+    );
+
+    let paf_output = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = paf_output.lines().collect();
+
+    // Should have some alignments (exact number depends on sparsification)
+    assert!(!lines.is_empty(), "Expected at least some alignments");
+
+    // Verify only group_A sequences are present
+    for line in &lines {
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() >= 6 {
+            assert!(
+                fields[0].starts_with("group_A"),
+                "Query {} doesn't start with 'group_A'",
+                fields[0]
+            );
+            assert!(
+                fields[5].starts_with("group_A"),
+                "Target {} doesn't start with 'group_A'",
+                fields[5]
+            );
+        }
+    }
+
+    // Test exclude filtering + sparsification
+    println!("  Testing exclude prefixes 'group_B,other' with giant:0.99 sparsification");
+    let output = Command::new("./target/debug/allwave")
+        .arg("--input")
+        .arg(fasta_path)
+        .arg("--exclude-prefixes")
+        .arg("group_B,other")
+        .arg("-p")
+        .arg("giant:0.99")
+        .output()
+        .expect("Failed to run allwave");
+
+    assert!(
+        output.status.success(),
+        "allwave failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    // Should show exclusion message
+    assert!(
+        stderr.contains("Excluded sequences with prefixes: 8 -> 3"),
+        "Expected exclude filtering message, got: {}",
+        stderr
+    );
+
+    let paf_output = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = paf_output.lines().collect();
+
+    // Should have some alignments (exact number depends on sparsification)
+    assert!(!lines.is_empty(), "Expected at least some alignments");
+
+    // Verify only group_A sequences are present (since group_B and other are excluded)
+    for line in &lines {
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() >= 6 {
+            assert!(
+                fields[0].starts_with("group_A"),
+                "Query {} should start with 'group_A' (group_B and other excluded)",
+                fields[0]
+            );
+            assert!(
+                fields[5].starts_with("group_A"),
+                "Target {} should start with 'group_A' (group_B and other excluded)",
+                fields[5]
+            );
+        }
+    }
+
+    // Clean up
+    std::fs::remove_file(fasta_path).unwrap();
+
+    println!("  Keep/exclude prefixes with sparsification tests passed!");
+}

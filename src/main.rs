@@ -69,6 +69,14 @@ struct Args {
     /// Use edlib edit distance for orientation detection instead of mash
     #[arg(long)]
     edlib_orientation: bool,
+
+    /// Keep only sequences whose IDs start with any of these prefixes (comma-separated list)
+    #[arg(short = 'k', long, conflicts_with = "exclude_prefixes")]
+    keep_prefixes: Option<String>,
+
+    /// Exclude sequences whose IDs start with any of these prefixes (comma-separated list)
+    #[arg(short = 'e', long, conflicts_with = "keep_prefixes")]
+    exclude_prefixes: Option<String>,
 }
 
 /// Parse ANI preset and return corresponding alignment scores
@@ -222,6 +230,50 @@ fn main() -> io::Result<()> {
                 id: record.id().to_string(),
                 seq: record.seq().to_vec(),
             });
+        }
+    }
+
+    // Apply sequence prefix filtering if specified
+    if let Some(prefix_str) = &args.keep_prefixes {
+        let prefixes: Vec<&str> = prefix_str.split(',').map(|s| s.trim()).collect();
+        let original_count = sequences.len();
+
+        sequences.retain(|seq| prefixes.iter().any(|prefix| seq.id.starts_with(prefix)));
+
+        let filtered_count = sequences.len();
+        if filtered_count != original_count {
+            eprintln!(
+                "Kept sequences with prefixes: {original_count} -> {filtered_count} (prefixes: {prefix_str})"
+            );
+        }
+
+        if sequences.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "No sequences match the specified keep prefixes",
+            ));
+        }
+    }
+
+    // Apply sequence prefix exclusion if specified
+    if let Some(prefix_str) = &args.exclude_prefixes {
+        let prefixes: Vec<&str> = prefix_str.split(',').map(|s| s.trim()).collect();
+        let original_count = sequences.len();
+
+        sequences.retain(|seq| !prefixes.iter().any(|prefix| seq.id.starts_with(prefix)));
+
+        let filtered_count = sequences.len();
+        if filtered_count != original_count {
+            eprintln!(
+                "Excluded sequences with prefixes: {original_count} -> {filtered_count} (prefixes: {prefix_str})"
+            );
+        }
+
+        if sequences.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "All sequences were excluded by the specified prefixes",
+            ));
         }
     }
 
