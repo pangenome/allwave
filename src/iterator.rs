@@ -1,7 +1,7 @@
 //! Iterator for all-vs-all sequence alignments
 
 use crate::alignment::align_pair;
-use crate::knn_graph::{estimate_tree_pair_count, extract_tree_pairs};
+use crate::knn_graph::extract_tree_pairs;
 use crate::mash::DEFAULT_KMER_SIZE;
 use crate::types::{AlignmentParams, AlignmentResult, Sequence, SparsificationStrategy};
 use rayon::prelude::*;
@@ -17,6 +17,7 @@ pub struct AllPairIterator<'a> {
     use_mash_orientation: bool,
     _sparsification: SparsificationStrategy,
     pair_iter: Box<dyn Iterator<Item = (usize, usize)> + Send + 'a>,
+    actual_pair_count: usize,
 }
 
 impl<'a> AllPairIterator<'a> {
@@ -75,6 +76,9 @@ impl<'a> AllPairIterator<'a> {
             }
         }
 
+        // Store the actual pair count after sparsification
+        let actual_pair_count = pairs.len();
+
         Self {
             sequences,
             params,
@@ -83,6 +87,7 @@ impl<'a> AllPairIterator<'a> {
             use_mash_orientation,
             _sparsification: sparsification,
             pair_iter: Box::new(pairs.into_iter()),
+            actual_pair_count,
         }
     }
 
@@ -133,34 +138,7 @@ impl<'a> AllPairIterator<'a> {
 
     /// Get the actual number of pairs that will be processed
     pub fn pair_count(&self) -> usize {
-        let n = self.sequences.len();
-        let base_pairs = if self.exclude_self {
-            n * (n - 1)
-        } else {
-            n * n
-        };
-
-        match &self._sparsification {
-            SparsificationStrategy::None => base_pairs,
-            SparsificationStrategy::Random(keep_fraction) => {
-                (base_pairs as f64 * keep_fraction).round() as usize
-            }
-            SparsificationStrategy::Auto => {
-                // Use connectivity model with 0.95 probability for auto mode
-                let keep_fraction = compute_connectivity_probability(n, 0.95);
-                (base_pairs as f64 * keep_fraction).round() as usize
-            }
-            SparsificationStrategy::Connectivity(connectivity_prob) => {
-                let keep_fraction = compute_connectivity_probability(n, *connectivity_prob);
-                (base_pairs as f64 * keep_fraction).round() as usize
-            }
-            SparsificationStrategy::TreeSampling(
-                k_nearest,
-                k_farthest,
-                random_fraction,
-                _kmer_size,
-            ) => estimate_tree_pair_count(n, *k_nearest, *k_farthest, *random_fraction),
-        }
+        self.actual_pair_count
     }
 }
 
