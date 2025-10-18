@@ -140,6 +140,12 @@ impl<'a> AllPairIterator<'a> {
     pub fn pair_count(&self) -> usize {
         self.actual_pair_count
     }
+
+    /// Export the prioritized pair list without performing alignments
+    /// Returns pairs as (seq1_idx, seq2_idx) in priority order
+    pub fn get_pairs(self) -> Vec<(usize, usize)> {
+        self.pair_iter.collect()
+    }
 }
 
 impl<'a> Iterator for AllPairIterator<'a> {
