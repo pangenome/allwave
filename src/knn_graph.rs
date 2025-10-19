@@ -49,6 +49,53 @@ pub fn extract_tree_pairs(
     all_pairs
 }
 
+/// Extract tree pairs and random pairs separately (for iterative alignment with early stopping)
+/// Returns (tree_pairs, random_pairs) where tree_pairs should be processed first to guarantee connectivity
+pub fn extract_tree_pairs_separated(
+    sequences: &[Sequence],
+    k_nearest: usize,
+    k_farthest: usize,
+    random_fraction: f64,
+    kmer_size: usize,
+) -> (Vec<(usize, usize)>, Vec<(usize, usize)>) {
+    if sequences.len() < 2 {
+        return (Vec::new(), Vec::new());
+    }
+
+    // Compute distance matrix
+    let distance_matrix =
+        crate::mash::compute_distance_matrix_with_params(sequences, kmer_size, 1000);
+
+    // Build tree pairs (k-nearest + k-farthest)
+    let mut tree_pairs = Vec::new();
+
+    if k_nearest > 0 {
+        let nearest_pairs = build_knn_graph(&distance_matrix, k_nearest, false);
+        tree_pairs.extend(nearest_pairs);
+    }
+
+    if k_farthest > 0 {
+        let farthest_pairs = build_knn_graph(&distance_matrix, k_farthest, true);
+        tree_pairs.extend(farthest_pairs);
+    }
+
+    // Remove duplicates from tree pairs
+    tree_pairs.sort_unstable();
+    tree_pairs.dedup();
+
+    // Generate random pairs
+    let mut random_pairs = if random_fraction > 0.0 {
+        generate_random_pairs(sequences.len(), random_fraction, sequences)
+    } else {
+        Vec::new()
+    };
+
+    // Remove any random pairs that are already in tree pairs
+    random_pairs.retain(|pair| !tree_pairs.binary_search(pair).is_ok());
+
+    (tree_pairs, random_pairs)
+}
+
 /// Extract sequence pairs using k-nearest neighbor graph (backward compatibility)
 pub fn extract_knn_pairs(
     sequences: &[Sequence],
