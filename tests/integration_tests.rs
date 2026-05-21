@@ -864,7 +864,7 @@ fn parse_identity(fields: &[&str]) -> f64 {
 
 #[test]
 fn test_orientation_detection_comparison() {
-    println!("\n=== Test: Mash vs Edlib orientation detection comparison ===");
+    println!("\n=== Test: Mash vs WFA orientation detection comparison ===");
 
     // Create test sequences with known orientations
     let test_cases = create_orientation_test_cases();
@@ -875,8 +875,8 @@ fn test_orientation_detection_comparison() {
         // Test mash-based orientation detection
         let mash_result = test_orientation_detection_mash(&test_case);
 
-        // Test edlib-based orientation detection
-        let edlib_result = test_orientation_detection_edlib(&test_case);
+        // Test WFA-based orientation detection
+        let wfa_result = test_orientation_detection_wfa(&test_case);
 
         println!(
             "    Mash result: forward={:.4}, reverse={:.4}, chose={}",
@@ -889,10 +889,10 @@ fn test_orientation_detection_comparison() {
             }
         );
         println!(
-            "    Edlib result: forward={}, reverse={}, chose={}",
-            edlib_result.forward_distance,
-            edlib_result.reverse_distance,
-            if edlib_result.is_reverse {
+            "    WFA result: forward={}, reverse={}, chose={}",
+            wfa_result.forward_distance,
+            wfa_result.reverse_distance,
+            if wfa_result.is_reverse {
                 "reverse"
             } else {
                 "forward"
@@ -901,7 +901,7 @@ fn test_orientation_detection_comparison() {
 
         // Both methods should agree on orientation
         assert_eq!(
-            mash_result.is_reverse, edlib_result.is_reverse,
+            mash_result.is_reverse, wfa_result.is_reverse,
             "Orientation detection methods disagree for test case: {}",
             test_case.name
         );
@@ -913,8 +913,8 @@ fn test_orientation_detection_comparison() {
             test_case.name
         );
         assert_eq!(
-            edlib_result.is_reverse, test_case.expected_reverse,
-            "Edlib orientation detection incorrect for test case: {}",
+            wfa_result.is_reverse, test_case.expected_reverse,
+            "WFA orientation detection incorrect for test case: {}",
             test_case.name
         );
     }
@@ -1140,24 +1140,33 @@ fn is_dna_base_test(b: u8) -> bool {
     matches!(b.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T')
 }
 
-fn test_orientation_detection_edlib(test_case: &OrientationTestCase) -> OrientationResult {
-    use edlib_rs::edlibrs::*;
-
-    let config = EdlibAlignConfigRs {
-        k: -1,
-        mode: EdlibAlignModeRs::EDLIB_MODE_NW,
-        task: EdlibAlignTaskRs::EDLIB_TASK_DISTANCE,
-        additionalequalities: &[],
+fn test_orientation_detection_wfa(test_case: &OrientationTestCase) -> OrientationResult {
+    let penalties = allwave::wfa::Penalties {
+        mismatch: 1,
+        gap_opening1: 1,
+        gap_extension1: 1,
+        gap_opening2: 1,
+        gap_extension2: 1,
     };
 
-    // Get edit distance for forward orientation
-    let fwd_result = edlibAlignRs(&test_case.query, &test_case.reference, &config);
-    let fwd_distance = fwd_result.editDistance;
+    let fwd_distance = allwave::wfa::align_sequences(
+        &test_case.query,
+        &test_case.reference,
+        &penalties,
+        allwave::wfa::AlignmentMode::EditDistance,
+    )
+    .map(|result| result.mismatches + result.insertions + result.deletions)
+    .unwrap_or(usize::MAX);
 
-    // Get edit distance for reverse complement orientation
     let rev_seq = reverse_complement(&test_case.query);
-    let rev_result = edlibAlignRs(&rev_seq, &test_case.reference, &config);
-    let rev_distance = rev_result.editDistance;
+    let rev_distance = allwave::wfa::align_sequences(
+        &rev_seq,
+        &test_case.reference,
+        &penalties,
+        allwave::wfa::AlignmentMode::EditDistance,
+    )
+    .map(|result| result.mismatches + result.insertions + result.deletions)
+    .unwrap_or(usize::MAX);
 
     OrientationResult {
         forward_distance: fwd_distance as f64,
@@ -1198,23 +1207,20 @@ fn test_orientation_detection_performance() {
         let mash_result = test_orientation_detection_mash(&test_case);
         let mash_time = start.elapsed();
 
-        // Time edlib-based detection
+        // Time WFA-based detection
         let start = Instant::now();
-        let edlib_result = test_orientation_detection_edlib(&test_case);
-        let edlib_time = start.elapsed();
+        let wfa_result = test_orientation_detection_wfa(&test_case);
+        let wfa_time = start.elapsed();
 
+        println!("    Mash time: {:?}, WFA time: {:?}", mash_time, wfa_time);
         println!(
-            "    Mash time: {:?}, Edlib time: {:?}",
-            mash_time, edlib_time
-        );
-        println!(
-            "    Mash result: {}, Edlib result: {}",
+            "    Mash result: {}, WFA result: {}",
             if mash_result.is_reverse {
                 "reverse"
             } else {
                 "forward"
             },
-            if edlib_result.is_reverse {
+            if wfa_result.is_reverse {
                 "reverse"
             } else {
                 "forward"
@@ -1223,7 +1229,7 @@ fn test_orientation_detection_performance() {
 
         // Both should agree on orientation
         assert_eq!(
-            mash_result.is_reverse, edlib_result.is_reverse,
+            mash_result.is_reverse, wfa_result.is_reverse,
             "Methods disagree for length {}",
             length
         );

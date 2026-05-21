@@ -6,6 +6,8 @@
 
 use crate::types::Sequence;
 
+type PairList = Vec<(usize, usize)>;
+
 /// Extract sequence pairs using k-nearest neighbor graph with optional stranger-joining
 pub fn extract_tree_pairs(
     sequences: &[Sequence],
@@ -57,7 +59,7 @@ pub fn extract_tree_pairs_separated(
     k_farthest: usize,
     random_fraction: f64,
     kmer_size: usize,
-) -> (Vec<(usize, usize)>, Vec<(usize, usize)>) {
+) -> (PairList, PairList) {
     if sequences.len() < 2 {
         return (Vec::new(), Vec::new());
     }
@@ -91,7 +93,7 @@ pub fn extract_tree_pairs_separated(
     };
 
     // Remove any random pairs that are already in tree pairs
-    random_pairs.retain(|pair| !tree_pairs.binary_search(pair).is_ok());
+    random_pairs.retain(|pair| tree_pairs.binary_search(pair).is_err());
 
     (tree_pairs, random_pairs)
 }

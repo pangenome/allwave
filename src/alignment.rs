@@ -1,12 +1,11 @@
 //! Core alignment functionality
 
 use crate::types::{AlignmentError, AlignmentMode, AlignmentParams, AlignmentResult, Sequence};
-#[cfg(feature = "edlib-orientation")]
-use edlib_rs::edlibrs::*;
 use lib_wfa2::affine_wavefront::{
     AffineWavefronts, AlignmentScope, AlignmentSpan, AlignmentStatus, HeuristicStrategy, MemoryMode,
 };
 use std::cell::RefCell;
+use std::thread::LocalKey;
 
 thread_local! {
     static WFA_ALIGNER: RefCell<Option<AffineWavefronts>> = const { RefCell::new(None) };
@@ -20,21 +19,14 @@ pub fn align_pair(
     query_idx: usize,
     target_idx: usize,
     params: &AlignmentParams,
-    _orientation_params: &AlignmentParams,
+    orientation_params: &AlignmentParams,
     use_mash_orientation: bool,
 ) -> AlignmentResult {
     // Determine best orientation using selected method
     let (query_seq, is_reverse) = if use_mash_orientation {
         determine_orientation_mash(&query.seq, &target.seq)
     } else {
-        #[cfg(feature = "edlib-orientation")]
-        {
-            determine_orientation_edlib(&query.seq, &target.seq)
-        }
-        #[cfg(not(feature = "edlib-orientation"))]
-        {
-            determine_orientation_mash(&query.seq, &target.seq)
-        }
+        determine_orientation_wfa(&query.seq, &target.seq, orientation_params)
     };
 
     // Perform the actual alignment with WFA2
@@ -152,26 +144,20 @@ fn is_dna_base(b: u8) -> bool {
     matches!(b.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T')
 }
 
-/// Determine best orientation for alignment using fast edit distance (edlib)
-#[cfg(feature = "edlib-orientation")]
-fn determine_orientation_edlib(query: &[u8], target: &[u8]) -> (Vec<u8>, bool) {
-    let config = EdlibAlignConfigRs {
-        k: -1,                                       // No limit on edit distance
-        mode: EdlibAlignModeRs::EDLIB_MODE_NW,       // Global alignment
-        task: EdlibAlignTaskRs::EDLIB_TASK_DISTANCE, // Just get distance
-        additionalequalities: &[],
-    };
-
-    // Get edit distance for forward orientation
-    let fwd_result = edlibAlignRs(query, target, &config);
-    let fwd_distance = fwd_result.editDistance;
-
-    // Get edit distance for reverse complement orientation
+/// Determine best orientation by running global WFA in both orientations.
+fn determine_orientation_wfa(
+    query: &[u8],
+    target: &[u8],
+    params: &AlignmentParams,
+) -> (Vec<u8>, bool) {
     let rev_seq = reverse_complement(query);
-    let rev_result = edlibAlignRs(&rev_seq, target, &config);
-    let rev_distance = rev_result.editDistance;
+    let fwd_distance = perform_wfa_alignment_with_cache(query, target, params, &WFA_ORIENTATION)
+        .map(|result| edit_distance_from_cigar(&result.cigar_bytes))
+        .unwrap_or(usize::MAX);
+    let rev_distance = perform_wfa_alignment_with_cache(&rev_seq, target, params, &WFA_ORIENTATION)
+        .map(|result| edit_distance_from_cigar(&result.cigar_bytes))
+        .unwrap_or(usize::MAX);
 
-    // Choose the better orientation
     if fwd_distance <= rev_distance {
         (query.to_vec(), false)
     } else {
@@ -200,10 +186,19 @@ fn perform_wfa_alignment(
     target: &[u8],
     params: &AlignmentParams,
 ) -> Result<AlignmentResult, AlignmentError> {
+    perform_wfa_alignment_with_cache(query, target, params, &WFA_ALIGNER)
+}
+
+fn perform_wfa_alignment_with_cache(
+    query: &[u8],
+    target: &[u8],
+    params: &AlignmentParams,
+    cache: &'static LocalKey<RefCell<Option<AffineWavefronts>>>,
+) -> Result<AlignmentResult, AlignmentError> {
     let mode = AlignmentMode::from_params(params);
 
     // Create or reuse WFA2 aligner
-    WFA_ALIGNER.with(|aligner_cell| {
+    cache.with(|aligner_cell| {
         let mut aligner_opt = aligner_cell.borrow_mut();
 
         let wf = match &mut *aligner_opt {
@@ -303,6 +298,13 @@ fn count_cigar_operations(cigar_bytes: &[u8]) -> (usize, usize) {
     }
 
     (matches, alignment_length)
+}
+
+fn edit_distance_from_cigar(cigar_bytes: &[u8]) -> usize {
+    cigar_bytes
+        .iter()
+        .filter(|&&op| matches!(op, b'X' | b'I' | b'D'))
+        .count()
 }
 
 /// Parse CIGAR to get alignment lengths
