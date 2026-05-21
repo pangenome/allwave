@@ -66,9 +66,9 @@ struct Args {
     #[arg(long)]
     mash_matrix: bool,
 
-    /// Use edlib edit distance for orientation detection instead of mash
+    /// Use WFA edit distance for orientation detection instead of mash
     #[arg(long)]
-    edlib_orientation: bool,
+    wfa_orientation: bool,
 
     /// Keep only sequences whose IDs start with any of these prefixes (comma-separated list)
     #[arg(short = 'k', long, conflicts_with = "exclude_prefixes")]
@@ -310,7 +310,7 @@ fn main() -> io::Result<()> {
         &sequences,
         params,
         true,
-        !args.edlib_orientation,
+        !args.wfa_orientation,
         sparsification,
     );
 
