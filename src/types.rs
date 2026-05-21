@@ -33,7 +33,7 @@ pub struct AlignmentResult {
 }
 
 /// Parameters for sequence alignment
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AlignmentParams {
     pub match_score: i32,
     pub mismatch_penalty: i32,
@@ -95,7 +95,7 @@ pub enum SparsificationStrategy {
 }
 
 /// Alignment mode (edit distance, single-piece affine, two-piece affine)
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AlignmentMode {
     EditDistance,
     SinglePieceAffine,

@@ -5,11 +5,20 @@ use lib_wfa2::affine_wavefront::{
     AffineWavefronts, AlignmentScope, AlignmentSpan, AlignmentStatus, HeuristicStrategy, MemoryMode,
 };
 use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 use std::thread::LocalKey;
 
+struct CachedAligner {
+    params: AlignmentParams,
+    // WFA2's native teardown has proven fragile in cached threaded use on CI.
+    // The cache holds only a few aligners per worker thread, so we keep them
+    // alive for process lifetime instead of deleting them during thread teardown.
+    wf: ManuallyDrop<AffineWavefronts>,
+}
+
 thread_local! {
-    static WFA_ALIGNER: RefCell<Option<AffineWavefronts>> = const { RefCell::new(None) };
-    static WFA_ORIENTATION: RefCell<Option<AffineWavefronts>> = const { RefCell::new(None) };
+    static WFA_ALIGNER: RefCell<Vec<CachedAligner>> = const { RefCell::new(Vec::new()) };
+    static WFA_ORIENTATION: RefCell<Vec<CachedAligner>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Perform alignment between two sequences
@@ -193,53 +202,25 @@ fn perform_wfa_alignment_with_cache(
     query: &[u8],
     target: &[u8],
     params: &AlignmentParams,
-    cache: &'static LocalKey<RefCell<Option<AffineWavefronts>>>,
+    cache: &'static LocalKey<RefCell<Vec<CachedAligner>>>,
 ) -> Result<AlignmentResult, AlignmentError> {
     let mode = AlignmentMode::from_params(params);
 
     // Create or reuse WFA2 aligner
     cache.with(|aligner_cell| {
-        let mut aligner_opt = aligner_cell.borrow_mut();
-
-        let wf = match &mut *aligner_opt {
-            Some(wf) => wf,
+        let mut aligners = aligner_cell.borrow_mut();
+        let pos = match aligners.iter().position(|cached| cached.params == *params) {
+            Some(pos) => pos,
             None => {
-                // Create new aligner based on mode
-                let new_wf = match mode {
-                    AlignmentMode::EditDistance => {
-                        AffineWavefronts::with_penalties_and_memory_mode(
-                            params.match_score,
-                            params.mismatch_penalty,
-                            params.mismatch_penalty,
-                            params.mismatch_penalty,
-                            MemoryMode::Ultralow,
-                        )
-                    }
-                    AlignmentMode::SinglePieceAffine => {
-                        AffineWavefronts::with_penalties_and_memory_mode(
-                            params.match_score,
-                            params.mismatch_penalty,
-                            params.gap_open,
-                            params.gap_extend,
-                            MemoryMode::Ultralow,
-                        )
-                    }
-                    AlignmentMode::TwoPieceAffine => {
-                        AffineWavefronts::with_penalties_affine2p_and_memory_mode(
-                            params.match_score,
-                            params.mismatch_penalty,
-                            params.gap_open,
-                            params.gap_extend,
-                            params.gap2_open.unwrap_or(params.gap_open),
-                            params.gap2_extend.unwrap_or(params.gap_extend),
-                            MemoryMode::Ultralow,
-                        )
-                    }
-                };
-                *aligner_opt = Some(new_wf);
-                aligner_opt.as_mut().unwrap()
+                aligners.push(CachedAligner {
+                    params: params.clone(),
+                    wf: ManuallyDrop::new(create_wfa_aligner(params, mode)),
+                });
+                aligners.len() - 1
             }
         };
+
+        let wf = &mut aligners[pos].wf;
 
         // Configure aligner
         wf.set_alignment_scope(AlignmentScope::Alignment);
@@ -277,6 +258,34 @@ fn perform_wfa_alignment_with_cache(
             }),
         }
     })
+}
+
+fn create_wfa_aligner(params: &AlignmentParams, mode: AlignmentMode) -> AffineWavefronts {
+    match mode {
+        AlignmentMode::EditDistance => AffineWavefronts::with_penalties_and_memory_mode(
+            params.match_score,
+            params.mismatch_penalty,
+            params.mismatch_penalty,
+            params.mismatch_penalty,
+            MemoryMode::Ultralow,
+        ),
+        AlignmentMode::SinglePieceAffine => AffineWavefronts::with_penalties_and_memory_mode(
+            params.match_score,
+            params.mismatch_penalty,
+            params.gap_open,
+            params.gap_extend,
+            MemoryMode::Ultralow,
+        ),
+        AlignmentMode::TwoPieceAffine => AffineWavefronts::with_penalties_affine2p_and_memory_mode(
+            params.match_score,
+            params.mismatch_penalty,
+            params.gap_open,
+            params.gap_extend,
+            params.gap2_open.unwrap_or(params.gap_open),
+            params.gap2_extend.unwrap_or(params.gap_extend),
+            MemoryMode::Ultralow,
+        ),
+    }
 }
 
 /// Count operations in CIGAR bytes
