@@ -1,6 +1,7 @@
 //! Core alignment functionality
 
 use crate::types::{AlignmentError, AlignmentMode, AlignmentParams, AlignmentResult, Sequence};
+#[cfg(feature = "edlib-orientation")]
 use edlib_rs::edlibrs::*;
 use lib_wfa2::affine_wavefront::{
     AffineWavefronts, AlignmentScope, AlignmentSpan, AlignmentStatus, HeuristicStrategy, MemoryMode,
@@ -26,7 +27,14 @@ pub fn align_pair(
     let (query_seq, is_reverse) = if use_mash_orientation {
         determine_orientation_mash(&query.seq, &target.seq)
     } else {
-        determine_orientation_edlib(&query.seq, &target.seq)
+        #[cfg(feature = "edlib-orientation")]
+        {
+            determine_orientation_edlib(&query.seq, &target.seq)
+        }
+        #[cfg(not(feature = "edlib-orientation"))]
+        {
+            determine_orientation_mash(&query.seq, &target.seq)
+        }
     };
 
     // Perform the actual alignment with WFA2
@@ -145,6 +153,7 @@ fn is_dna_base(b: u8) -> bool {
 }
 
 /// Determine best orientation for alignment using fast edit distance (edlib)
+#[cfg(feature = "edlib-orientation")]
 fn determine_orientation_edlib(query: &[u8], target: &[u8]) -> (Vec<u8>, bool) {
     let config = EdlibAlignConfigRs {
         k: -1,                                       // No limit on edit distance
