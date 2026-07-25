@@ -225,7 +225,7 @@ fn perform_wfa_alignment_with_cache(
         // Configure aligner
         wf.set_alignment_scope(AlignmentScope::Alignment);
         wf.set_alignment_span(AlignmentSpan::End2End);
-        wf.set_heuristic(&HeuristicStrategy::None);
+        wf.set_heuristic(Some(&HeuristicStrategy::None));
 
         // Perform alignment
         let status = wf.align(query, target);

@@ -220,7 +220,7 @@ pub fn align_sequences(
     // Critical configuration settings for reliable global alignment
     wf.set_alignment_scope(AlignmentScope::Alignment);
     wf.set_alignment_span(AlignmentSpan::End2End);
-    wf.set_heuristic(&HeuristicStrategy::None);
+    wf.set_heuristic(Some(&HeuristicStrategy::None));
 
     // Perform alignment
     let status = wf.align(pattern, text);
