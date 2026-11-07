@@ -276,7 +276,7 @@ fn run_alignment_test(
     test_case.write_fasta(&fasta_path)?;
 
     // Run allwave
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(&fasta_path)
         .output()?;
@@ -479,7 +479,7 @@ fn test_reverse_complement_alignment() {
     .unwrap();
 
     // Run allwave with no sparsification to ensure all pairs are computed
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(fasta_path)
         .arg("-p")
@@ -622,7 +622,7 @@ fn test_alignment_correctness() {
     test_case.write_fasta(&fasta_path).unwrap();
 
     // Run allwave
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(&fasta_path)
         .output()
@@ -791,7 +791,7 @@ fn test_multiple_sequence_pairs() {
     }
 
     // Run allwave with no sparsification to ensure all pairs are computed
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(fasta_path)
         .arg("-p")
@@ -1263,7 +1263,7 @@ fn test_keep_prefixes_filtering() {
 
     // Test 1: Single prefix keep (long form)
     println!("  Testing single prefix keep: 'human'");
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(fasta_path)
         .arg("--keep-prefixes")
@@ -1304,7 +1304,7 @@ fn test_keep_prefixes_filtering() {
 
     // Test 2: Multiple prefix keep (short form)
     println!("  Testing multiple prefix keep: 'human,mouse' (short form -k)");
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(fasta_path)
         .arg("-k")
@@ -1350,7 +1350,7 @@ fn test_keep_prefixes_filtering() {
 
     // Test 3: Non-matching prefix (should fail)
     println!("  Testing non-matching keep prefix: 'virus'");
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(fasta_path)
         .arg("-k")
@@ -1374,7 +1374,7 @@ fn test_keep_prefixes_filtering() {
 
     // Test 4: Prefix with whitespace
     println!("  Testing keep prefix with whitespace: ' human , mouse '");
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(fasta_path)
         .arg("--keep-prefixes")
@@ -1434,7 +1434,7 @@ fn test_exclude_prefixes_filtering() {
 
     // Test 1: Exclude single prefix (long form)
     println!("  Testing exclude single prefix: 'human'");
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(fasta_path)
         .arg("--exclude-prefixes")
@@ -1480,7 +1480,7 @@ fn test_exclude_prefixes_filtering() {
 
     // Test 2: Exclude multiple prefixes (short form)
     println!("  Testing exclude multiple prefixes: 'human,mouse' (short form -e)");
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(fasta_path)
         .arg("-e")
@@ -1521,7 +1521,7 @@ fn test_exclude_prefixes_filtering() {
 
     // Test 3: Exclude all sequences (should fail)
     println!("  Testing exclude all sequences (should fail)");
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(fasta_path)
         .arg("-e")
@@ -1545,7 +1545,7 @@ fn test_exclude_prefixes_filtering() {
 
     // Test 4: Exclude with whitespace
     println!("  Testing exclude with whitespace: ' human , mouse '");
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(fasta_path)
         .arg("--exclude-prefixes")
@@ -1587,7 +1587,7 @@ fn test_prefix_filtering_conflicts() {
 
     // Test that keep and exclude conflict
     println!("  Testing that --keep-prefixes and --exclude-prefixes conflict");
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(fasta_path)
         .arg("--keep-prefixes")
@@ -1642,7 +1642,7 @@ fn test_no_prefix_filtering() {
 
     // Test without any filtering (should include all sequences)
     println!("  Testing without prefix filtering (all sequences)");
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(fasta_path)
         .arg("-p")
@@ -1701,7 +1701,7 @@ fn test_keep_prefixes_with_sparsification() {
 
     // Test keep filtering + sparsification
     println!("  Testing keep prefix 'group_A' with giant:0.99 sparsification");
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(fasta_path)
         .arg("-k")
@@ -1750,7 +1750,7 @@ fn test_keep_prefixes_with_sparsification() {
 
     // Test exclude filtering + sparsification
     println!("  Testing exclude prefixes 'group_B,other' with giant:0.99 sparsification");
-    let output = Command::new("./target/debug/allwave")
+    let output = Command::new(env!("CARGO_BIN_EXE_allwave"))
         .arg("--input")
         .arg(fasta_path)
         .arg("--exclude-prefixes")
